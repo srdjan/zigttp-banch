@@ -1,6 +1,6 @@
 # zigttp Benchmark Suite
 
-Comprehensive performance comparison of zigttp against Node.js, Deno, and Bun.
+Comprehensive performance comparison of [zigttp](https://github.com/srdjan/zigttp) against Node.js, Deno, and Bun.
 
 ## Quick Start
 
