@@ -1,0 +1,39 @@
+{
+  "benchmark_suite_version": "1.0.0",
+  "date": "2026-01-10",
+  "runtimes": {
+    "zigttp": {
+      "version": "0.1.0",
+      "source": "../zigttp",
+      "binary": "../zigttp/zig-out/bin/zigttp-server",
+      "build_command": "zig build -Doptimize=ReleaseFast",
+      "handler": "../zigttp/examples/handler.jsx"
+    },
+    "node": {
+      "version": "22.21.0",
+      "binary": "node"
+    },
+    "deno": {
+      "version": "2.6.4",
+      "binary": "deno"
+    },
+    "bun": {
+      "version": "TBD",
+      "binary": "bun",
+      "install_command": "curl -fsSL https://bun.sh/install | bash"
+    }
+  },
+  "tools": {
+    "hey": {
+      "binary": "hey"
+    }
+  },
+  "config": {
+    "base_port": 8080,
+    "warmup_requests": 1000,
+    "warmup_delay_ms": 1000,
+    "duration_seconds": 30,
+    "connection_levels": [1, 10, 100, 1000],
+    "endpoints": ["/api/health", "/api/echo", "/api/greet/world"]
+  }
+}

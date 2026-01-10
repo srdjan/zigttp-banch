@@ -1,0 +1,17 @@
+{
+    "type": "http_benchmark",
+    "runtime": "node",
+    "endpoint": "/api/echo",
+    "connections": 1,
+    "duration": "30s",
+    "warmup_requests": 1000,
+    "metrics": {
+        "requests_per_second": 23798.5759,
+        "latency_avg_secs": 0.0000,
+        "latency_p50_secs": 0.0000,
+        "latency_p95_secs": 0.0001,
+        "latency_p99_secs": 0.0001,
+        "errors": 0
+    },
+    "timestamp": "2026-01-10T19:39:54Z"
+}

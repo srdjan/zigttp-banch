@@ -1,0 +1,14 @@
+{
+    "timestamp": "2026-01-10T19:38:49Z",
+    "os": "Darwin",
+    "os_version": "25.1.0",
+    "arch": "arm64",
+    "cpu_model": "Apple M4 Pro",
+    "cpu_cores": 14,
+    "ram_gb": 24,
+    "runtimes": {
+        "node": "v22.21.0",
+        "deno": "2.6.4",
+        "bun": "not installed"
+    }
+}

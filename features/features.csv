@@ -1,0 +1,29 @@
+Feature,Category,zigttp,Node.js,Deno,Bun,Notes
+ES5 Strict,Language,full,full,full,full,All runtimes support ES5 strict mode
+ES6 (let/const/arrow),Language,full,full,full,full,Basic ES6 features
+ES6 (for-of/destructure),Language,full,full,full,full,Iterator support
+ES6 (classes),Language,partial,full,full,full,zigttp: basic class support
+ES6 (Promises),Language,none,full,full,full,zigttp: sync-only model
+ES2020+ (optional chaining),Language,none,full,full,full,zigttp: not implemented
+TypeScript,Language,strip-only,transpile,native,native,zigttp: strips types at parse time
+JSX,Language,native,transpile,transpile,native,zigttp: native SSR transform
+TSX,Language,native,transpile,transpile,native,zigttp: combined TS strip + JSX
+HTTP Server,API,native,http module,Deno.serve,Bun.serve,All have native servers
+Request/Response,API,native,manual,native,native,zigttp: Fetch-compatible API
+fetch(),API,basic,native,native,native,zigttp: basic implementation
+console.log,API,full,full,full,full,All support console
+setTimeout,API,partial,full,full,full,zigttp: basic timers
+File System,API,partial,fs module,Deno.*,Bun.file,zigttp: Deno.readTextFile only
+Crypto,API,none,crypto,crypto,crypto,zigttp: not implemented
+WebSocket,API,none,ws/native,native,native,zigttp: not implemented
+Streams,API,none,full,full,full,zigttp: not implemented
+URL/URLSearchParams,API,basic,full,full,full,zigttp: basic parsing
+JSON,API,full,full,full,full,All support JSON.parse/stringify
+npm packages,Ecosystem,none,full,compat,full,zigttp: no module system
+ESM imports,Ecosystem,none,full,full,full,zigttp: single-file handlers
+Binary Size,Deployment,~4MB,~100MB+,~100MB+,~100MB+,zigttp: single static binary
+Cold Start,Deployment,<1ms,50-100ms,30-50ms,20-40ms,zigttp: no JIT warmup
+Memory Baseline,Deployment,~1MB,~50MB,~30MB,~30MB,Approximate idle RSS
+Request Isolation,Runtime,RuntimePool,process,isolate,worker,zigttp: per-request context
+GC Model,Runtime,generational,V8,V8,JSC,zigttp: SIMD-accelerated sweep
+Async Model,Runtime,sync,event-loop,event-loop,event-loop,zigttp: synchronous handlers

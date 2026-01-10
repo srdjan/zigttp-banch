@@ -1,0 +1,17 @@
+{
+    "type": "http_benchmark",
+    "runtime": "node",
+    "endpoint": "/api/health",
+    "connections": 1,
+    "duration": "30s",
+    "warmup_requests": 1000,
+    "metrics": {
+        "requests_per_second": 25041.9050,
+        "latency_avg_secs": 0.0000,
+        "latency_p50_secs": in,
+        "latency_p95_secs": in,
+        "latency_p99_secs": in,
+        "errors": 0
+    },
+    "timestamp": "2026-01-10T19:27:27Z"
+}
