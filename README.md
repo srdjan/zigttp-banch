@@ -18,6 +18,21 @@ Comprehensive performance comparison of [zigttp](https://github.com/srdjan/zigtt
 ./scripts/run.sh memory      # Memory profiling
 ```
 
+## Running Benchmarks
+
+```bash
+# Run a specific runtime only (node|deno|bun|zigttp)
+./scripts/run.sh microbench node
+./scripts/run.sh microbench bun
+./scripts/run.sh http zigttp
+
+# Save results to a custom directory
+./scripts/run_microbench.sh /tmp/zigttp_microbench all
+
+# Run microbenchmarks and emit a combined ops/sec table
+./scripts/run_microbench_table.sh /tmp/zigttp_microbench_table all
+```
+
 ## Prerequisites
 
 - Node.js (tested with v22.21.0)
@@ -31,6 +46,7 @@ Build zigttp:
 cd ../zigttp
 zig build -Doptimize=ReleaseFast
 ```
+This also produces `zig-out/bin/zigttp-bench` used by the microbenchmark runner.
 
 ## Project Structure
 
@@ -63,6 +79,7 @@ Microbenchmarks testing core JS performance:
 - Property access
 - Function calls
 - JSON serialization
+- HTTP handler simulation
 
 ### Cold Start
 Time from process spawn to first successful HTTP response.

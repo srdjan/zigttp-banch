@@ -14,119 +14,11 @@ MICROBENCH_DIR="$PROJECT_DIR/microbench"
 mkdir -p "$RESULTS_DIR"
 
 # Create combined benchmark script that works across runtimes
-BENCH_SCRIPT=$(cat <<'ENDSCRIPT'
-// Combined microbenchmark runner
-
-const WARMUP_ITERATIONS = 10;
-const MEASURED_ITERATIONS = 30;
-
-function now() {
-    if (typeof performance !== 'undefined' && performance.now) {
-        return performance.now();
-    }
-    return Date.now();
-}
-
-function benchmark(name, fn, innerIterations) {
-    // Warmup
-    for (let i = 0; i < WARMUP_ITERATIONS; i++) { fn(); }
-
-    // Measure
-    const results = [];
-    for (let i = 0; i < MEASURED_ITERATIONS; i++) {
-        const start = now();
-        fn();
-        results.push(now() - start);
-    }
-
-    const totalMs = results.reduce((a, b) => a + b, 0);
-    const totalOps = innerIterations * MEASURED_ITERATIONS;
-    return {
-        name: name,
-        total_ms: totalMs,
-        ns_per_op: (totalMs * 1000000) / totalOps,
-        ops_per_sec: Math.floor(totalOps / (totalMs / 1000))
-    };
-}
-
-// Benchmarks
-const ITERATIONS = 50000;
-
-function runArithmetic() {
-    let sum = 0;
-    for (let i = 0; i < ITERATIONS; i++) {
-        sum = (sum + i) % 1000000;
-        sum = (sum - (i % 1000) + 1000000) % 1000000;
-        sum = (sum * 2) % 1000000;
-        sum = (sum >> 1);
-    }
-    return sum;
-}
-
-function runStringOps() {
-    const str = 'The quick brown fox jumps over the lazy dog';
-    let count = 0;
-    for (let i = 0; i < ITERATIONS; i++) {
-        count = (count + str.indexOf('fox')) % 1000000;
-        count = (count + str.length) % 1000000;
-    }
-    return count;
-}
-
-function runObjectCreate() {
-    let objects = [];
-    for (let i = 0; i < ITERATIONS; i++) {
-        objects.push({ id: i, name: 'item' });
-        if (objects.length > 100) { objects = []; }
-    }
-    return objects.length;
-}
-
-function runPropertyAccess() {
-    const obj = { a: 1, b: 2, c: 3, d: 4, e: 5 };
-    let sum = 0;
-    for (let i = 0; i < ITERATIONS; i++) {
-        sum = (sum + obj.a + obj.b + obj.c + obj.d + obj.e) % 1000000;
-        obj.a = i % 100;
-    }
-    return sum;
-}
-
-function runFunctionCalls() {
-    function add(a, b) { return (a + b) % 1000000; }
-    function compute(x, y) { return add(x, y); }
-    let result = 0;
-    for (let i = 0; i < ITERATIONS; i++) {
-        result = compute(i % 1000, result);
-    }
-    return result;
-}
-
-function runJsonOps() {
-    const obj = { users: [{ id: 1 }, { id: 2 }] };
-    let count = 0;
-    const JSON_ITERATIONS = 5000;
-    for (let i = 0; i < JSON_ITERATIONS; i++) {
-        const json = JSON.stringify(obj);
-        const parsed = JSON.parse(json);
-        count = (count + parsed.users.length) % 1000000;
-    }
-    return count;
-}
-
-// Run all benchmarks
-const results = {
-    arithmetic: benchmark('arithmetic', runArithmetic, ITERATIONS),
-    stringOps: benchmark('stringOps', runStringOps, ITERATIONS),
-    objectCreate: benchmark('objectCreate', runObjectCreate, ITERATIONS),
-    propertyAccess: benchmark('propertyAccess', runPropertyAccess, ITERATIONS),
-    functionCalls: benchmark('functionCalls', runFunctionCalls, ITERATIONS),
-    jsonOps: benchmark('jsonOps', runJsonOps, 5000)
-};
-
-console.log(JSON.stringify(results, null, 2));
-ENDSCRIPT
-)
+BENCH_SCRIPT="$(cat \
+    "$MICROBENCH_DIR/runner.js" \
+    "$MICROBENCH_DIR/benchmarks/"*.js \
+    "$MICROBENCH_DIR/suite.js" \
+)"
 
 run_microbench() {
     local runtime=$1
@@ -149,10 +41,96 @@ EOF
 import json, sys
 data = json.load(sys.stdin)
 for name, result in data.items():
-    print(f\"  {name}: {result['ops_per_sec']:,} ops/sec\")
+    ops = result.get('ops_per_sec', 0)
+    print(f\"  {name}: {ops:,.2f} ops/sec\")
 "
     else
         echo "  Failed to run benchmarks"
+    fi
+    echo ""
+}
+
+run_zigttp_microbench() {
+    local runtime="zigttp"
+    local zigttp_bin="$PROJECT_DIR/../zigttp/zig-out/bin/zigttp-bench"
+
+    echo "=== Microbenchmarks: $runtime ==="
+
+    if [[ ! -x "$zigttp_bin" ]]; then
+        echo "  zigttp not built, skipping (run: cd ../zigttp && zig build bench)"
+        echo ""
+        return
+    fi
+
+    set +e
+    local output
+    output=$("$zigttp_bin" --json --quiet 2>/dev/null | python3 -c '
+import json
+import sys
+
+name_map = {
+    "intArithmetic": "arithmetic",
+    "stringOps": "stringOps",
+    "objectCreate": "objectCreate",
+    "propertyAccess": "propertyAccess",
+    "functionCalls": "functionCalls",
+    "jsonOps": "jsonOps",
+}
+results = {}
+
+data = json.load(sys.stdin)
+benchmarks = data.get("benchmarks", [])
+
+for bench in benchmarks:
+    raw_name = bench.get("name")
+    if not raw_name:
+        continue
+    mapped_name = name_map.get(raw_name, raw_name)
+    if mapped_name in results:
+        continue
+    time_ms = float(bench.get("time_ms", 0))
+    ops = float(bench.get("ops_per_sec", 0))
+    entry = {
+        "name": mapped_name,
+        "ops_per_sec": ops,
+        "total_ms": time_ms,
+        "source_bench": raw_name,
+    }
+    iterations = bench.get("iterations")
+    if iterations:
+        entry["inner_iterations"] = iterations
+    results[mapped_name] = entry
+
+print(json.dumps(results, indent=2))
+')
+    local status=$?
+    set -e
+
+    if [[ $status -ne 0 && -z "$output" ]]; then
+        echo "  Failed to run zigttp-bench"
+        echo ""
+        return
+    fi
+
+    if [[ -n "$output" ]]; then
+        cat > "$RESULTS_DIR/microbench_${runtime}.json" <<EOF
+{
+    "type": "microbenchmark",
+    "runtime": "$runtime",
+    "benchmarks": $output,
+    "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+    "source": "zigttp-bench"
+}
+EOF
+        echo "$output" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for name, result in data.items():
+    ops = result.get('ops_per_sec', 0)
+    print(f\"  {name}: {ops:,.2f} ops/sec\")
+"
+    else
+        echo "  Failed to parse zigttp-bench output"
     fi
     echo ""
 }
@@ -170,11 +148,24 @@ if [[ "$RUNTIME" == "all" || "$RUNTIME" == "deno" ]]; then
 fi
 
 if [[ "$RUNTIME" == "all" || "$RUNTIME" == "bun" ]]; then
+    BUN_BIN=""
     if command -v bun &> /dev/null; then
-        run_microbench "bun" "bun run -"
+        BUN_BIN="$(command -v bun)"
+    elif [[ -n "${BUN_INSTALL:-}" && -x "$BUN_INSTALL/bin/bun" ]]; then
+        BUN_BIN="$BUN_INSTALL/bin/bun"
+    elif [[ -x "$HOME/.bun/bin/bun" ]]; then
+        BUN_BIN="$HOME/.bun/bin/bun"
+    fi
+
+    if [[ -n "$BUN_BIN" ]]; then
+        run_microbench "bun" "\"$BUN_BIN\" run -"
     else
         echo "Bun not installed, skipping"
     fi
+fi
+
+if [[ "$RUNTIME" == "all" || "$RUNTIME" == "zigttp" ]]; then
+    run_zigttp_microbench
 fi
 
 echo "=== Microbenchmarks Complete ==="

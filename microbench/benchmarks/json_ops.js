@@ -1,12 +1,15 @@
 // JSON operations benchmark
 // Tests JSON.stringify and JSON.parse performance
 
-const INNER_ITERATIONS = 5000;
+const JSON_OPS_ITERATIONS = 5000;
 
-function runJsonOps() {
-    const obj = { users: [{ id: 1 }, { id: 2 }] };
+function runJsonOps(seed = 0) {
+    const obj = { users: [{ id: 1 }, { id: 2 }], seed: 0 };
+    obj.seed = seed;
+    obj.users[0].id = (seed & 0xff) + 1;
+    obj.users[1].id = (seed & 0xff) + 2;
     let count = 0;
-    for (let i = 0; i < INNER_ITERATIONS; i++) {
+    for (let i = 0; i < JSON_OPS_ITERATIONS; i++) {
         const json = JSON.stringify(obj);
         const parsed = JSON.parse(json);
         count = (count + parsed.users.length) % 1000000;
@@ -15,9 +18,9 @@ function runJsonOps() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runJsonOps, INNER_ITERATIONS, name: 'jsonOps' };
+    module.exports = { runJsonOps, INNER_ITERATIONS: JSON_OPS_ITERATIONS, name: 'jsonOps' };
 }
 if (typeof globalThis !== 'undefined') {
     globalThis.runJsonOps = runJsonOps;
-    globalThis.JSON_OPS_ITERATIONS = INNER_ITERATIONS;
+    globalThis.JSON_OPS_ITERATIONS = JSON_OPS_ITERATIONS;
 }

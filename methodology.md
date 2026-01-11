@@ -62,11 +62,15 @@ Fresh process spawn per measurement iteration. Used for cold start benchmarks.
 | propertyAccess | Property read/write | 50000 |
 | functionCalls | Nested function calls | 50000 |
 | jsonOps | JSON.stringify/parse | 5000 |
+| httpHandler | Response object + JSON body | 5000 |
 
 ### Protocol
-- 10 warmup iterations (discarded)
-- 30 measured iterations
-- Output: nanoseconds per operation, operations per second
+- 20 warmup iterations plus a minimum warmup time window (>= 100ms)
+- Auto-calibrate batch size per benchmark to reach a target sample duration (20–100ms depending on timer resolution)
+- 30 measured iterations using calibrated batch size
+- High-resolution timers per runtime (hrtime/performance where available; Date.now fallback)
+- Output: nanoseconds per operation, operations per second, median/p95 sample times
+- Note: zigttp microbench numbers are collected via `zigttp-bench` and parsed into the shared JSON format.
 
 ## Cold Start
 

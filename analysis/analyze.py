@@ -159,7 +159,7 @@ def generate_report(results: dict[str, Any], output_path: Path) -> None:
                     benchmarks = results["microbench"][rt].get("benchmarks", {})
                     if bench in benchmarks:
                         ops = benchmarks[bench].get("ops_per_sec", 0)
-                        row += f" {ops:,} ops/s |"
+                        row += f" {ops:,.2f} ops/s |"
                     else:
                         row += " - |"
                 lines.append(row)
