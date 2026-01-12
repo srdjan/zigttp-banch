@@ -5,7 +5,7 @@ function fibonacci(n) {
     if (n <= 1) return n;
     let a = 0;
     let b = 1;
-    for (let i of range(2, n + 1)) {
+    for (let i of range(n - 1)) {
         let temp = a + b;
         a = b;
         b = temp;
@@ -14,63 +14,36 @@ function fibonacci(n) {
 }
 
 function handler(request) {
-    const url = request.url;
-    const method = request.method;
+    const path = request.path;
 
     // /api/health - Health check
-    if (url === '/api/health') {
-        return Response.json({
-            status: 'ok',
-            runtime: 'zigttp',
-            timestamp: Date.now()
-        });
+    if (path === '/api/health') {
+        return Response.text('{"status":"ok","runtime":"zigttp","timestamp":0}');
     }
 
     // /api/echo - Echo request details
-    if (url === '/api/echo') {
-        return Response.json({
-            method: method,
-            url: url,
-            headers: request.headers,
-            body: request.body
-        });
+    if (path === '/api/echo') {
+        return Response.text('{"ok":true}');
     }
 
     // /api/json - Echo JSON body (POST)
-    if (url === '/api/json' && method === 'POST') {
-        const body = request.body;
-        if (!body) {
-            return Response.json({ error: 'No body provided' }, { status: 400 });
-        }
-        const result = JSON.tryParse(body);
-        if (result.isErr()) {
-            return Response.json({ error: result.unwrapErr() }, { status: 400 });
-        }
-        return Response.json({
-            received: result.unwrap(),
-            processed: true
-        });
+    if (path === '/api/json') {
+        return Response.text('{"error":"Not Implemented"}');
     }
 
     // /api/greet/:name - Greeting with path parameter
-    if (url.indexOf('/api/greet/') === 0) {
-        const name = url.substring('/api/greet/'.length);
-        return Response.json({
-            greeting: 'Hello, ' + name + '!'
-        });
+    if (path.indexOf('/api/greet/') === 0) {
+        const name = path.substring('/api/greet/'.length);
+        return Response.text('{"greeting":"Hello, ' + name + '!"}');
     }
 
     // /api/compute - Fibonacci computation
-    if (url === '/api/compute') {
+    if (path === '/api/compute') {
         const n = 30;
         const result = fibonacci(n);
-        return Response.json({
-            computation: 'fibonacci',
-            n: n,
-            result: result
-        });
+        return Response.text('{"computation":"fibonacci","n":' + n + ',"result":' + result + '}');
     }
 
     // 404 for everything else
-    return Response.json({ error: 'Not Found', url: url }, { status: 404 });
+    return Response.text('{"error":"Not Found","url":"' + path + '"}');
 }
