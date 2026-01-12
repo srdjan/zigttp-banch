@@ -56,6 +56,21 @@ BENCH_MAX_MEASURED_TOTAL_MS=500 \
 ./scripts/run_microbench.sh all
 ```
 
+### Flamegraph (zigttp)
+
+Generate a flamegraph for the zigttp microbench (defaults to `httpHandlerHeavy`):
+
+```bash
+./scripts/run_flamegraph.sh
+
+# Longer sampling window / heavier workload
+PROFILE_SECONDS=20 \
+BENCH_HTTP_HANDLER_HEAVY_ITERATIONS=4000 \
+./scripts/run_flamegraph.sh
+```
+
+The SVG is saved under `results/<timestamp>/flamegraph.svg`.
+
 ## Prerequisites
 
 - Node.js (tested with v22.21.0)
