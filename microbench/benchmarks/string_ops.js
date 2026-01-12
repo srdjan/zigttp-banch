@@ -7,7 +7,7 @@ function runStringOps(seed = 0) {
     const str = 'The quick brown fox jumps over the lazy dog';
     const needle = (seed & 1) ? 'fox' : 'dog';
     let count = 0;
-    for (let i = 0; i < STRING_OPS_ITERATIONS; i++) {
+    for (let _ of range(STRING_OPS_ITERATIONS)) {
         count = (count + str.indexOf(needle)) % 1000000;
         count = (count + str.length + (seed & 7)) % 1000000;
     }

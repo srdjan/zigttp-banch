@@ -13,7 +13,7 @@ function compute(x, y) {
 
 function runFunctionCalls(seed = 0) {
     let result = seed | 0;
-    for (let i = 0; i < FUNCTION_CALLS_ITERATIONS; i++) {
+    for (let i of range(FUNCTION_CALLS_ITERATIONS)) {
         result = compute((i + seed) % 1000, result);
     }
     return result;

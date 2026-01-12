@@ -63,6 +63,7 @@ Fresh process spawn per measurement iteration. Used for cold start benchmarks.
 | functionCalls | Nested function calls | 50000 |
 | jsonOps | JSON.stringify/parse | 5000 |
 | httpHandler | Response object + JSON body | 5000 |
+| httpHandlerHeavy | Routing + JSON parse + response assembly | 2000 |
 
 ### Protocol
 - 20 warmup iterations plus a minimum warmup time window (>= 100ms)
@@ -70,7 +71,11 @@ Fresh process spawn per measurement iteration. Used for cold start benchmarks.
 - 30 measured iterations using calibrated batch size
 - High-resolution timers per runtime (hrtime/performance where available; Date.now fallback)
 - Output: nanoseconds per operation, operations per second, median/p95 sample times
-- Note: zigttp microbench numbers are collected via `zigttp-bench` and parsed into the shared JSON format.
+- Note: zigttp microbench numbers are collected by running the shared JS suite through `zigttp-bench --script` for parity.
+- Optional overrides via env vars:
+  - `BENCH_FILTER` (comma-separated list of benchmarks)
+  - `BENCH_WARMUP_ITERATIONS`, `BENCH_MEASURED_ITERATIONS`, `BENCH_WARMUP_MS`, `BENCH_MAX_MEASURED_TOTAL_MS`
+  - `BENCH_HTTP_HANDLER_HEAVY_ITERATIONS` (inner loop size for httpHandlerHeavy)
 
 ## Cold Start
 
@@ -112,6 +117,8 @@ Significance threshold: p < 0.05.
 2. Record system info with each run
 3. Run suite 3x minimum for consistency
 4. Report coefficient of variation (CV)
+
+All runs are stored under unique `results/<timestamp>_<pid>_<rand>/` folders to preserve historical trends.
 
 ## Limitations
 

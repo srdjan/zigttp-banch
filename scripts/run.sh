@@ -9,7 +9,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-RESULTS_DIR="$PROJECT_DIR/results/$(date +%Y%m%d_%H%M%S)"
+RESULTS_DIR="$PROJECT_DIR/results/$(date +%Y%m%d_%H%M%S)_$$_$RANDOM"
 
 MODE="${1:-full}"
 RUNTIME="${2:-all}"
@@ -46,7 +46,7 @@ case "$MODE" in
         ;;
     microbench)
         echo ""
-        "$SCRIPT_DIR/run_microbench.sh" "$RESULTS_DIR" "$RUNTIME"
+        RESULTS_DIR="$RESULTS_DIR" "$SCRIPT_DIR/run_microbench.sh" "$RUNTIME"
         ;;
     coldstart)
         echo ""
@@ -60,7 +60,7 @@ case "$MODE" in
         echo ""
         "$SCRIPT_DIR/run_http.sh" "$RESULTS_DIR" "$RUNTIME" "$CONNECTIONS"
         echo ""
-        "$SCRIPT_DIR/run_microbench.sh" "$RESULTS_DIR" "$RUNTIME"
+        RESULTS_DIR="$RESULTS_DIR" "$SCRIPT_DIR/run_microbench.sh" "$RUNTIME"
         echo ""
         "$SCRIPT_DIR/run_coldstart.sh" "$RESULTS_DIR" "$RUNTIME" 50
         echo ""

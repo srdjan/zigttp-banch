@@ -6,11 +6,39 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-RESULTS_DIR="${1:-$PROJECT_DIR/results/$(date +%Y%m%d_%H%M%S)}"
-RUNTIME="${2:-all}"
+RESULTS_BASE="$PROJECT_DIR/results"
+RUNTIME="${1:-all}"
+
+if [[ -z "${RESULTS_DIR:-}" ]]; then
+    RESULTS_DIR="$RESULTS_BASE/$(date +%Y%m%d_%H%M%S)_$$_$RANDOM"
+else
+    if [[ "$RESULTS_DIR" = /* ]]; then
+        if [[ "$RESULTS_DIR" == "$RESULTS_BASE"* ]]; then
+            RESULTS_DIR="$RESULTS_DIR"
+        else
+            RESULTS_DIR="$RESULTS_BASE/$(basename "$RESULTS_DIR")"
+        fi
+    else
+        if [[ "$RESULTS_DIR" == results/* ]]; then
+            RESULTS_DIR="$PROJECT_DIR/$RESULTS_DIR"
+        else
+            RESULTS_DIR="$RESULTS_BASE/$RESULTS_DIR"
+        fi
+    fi
+fi
+
+ensure_unique_results_dir() {
+    if [[ -d "$RESULTS_DIR" ]]; then
+        if [[ -n "$(ls -A "$RESULTS_DIR" 2>/dev/null)" ]]; then
+            RESULTS_DIR="$RESULTS_BASE/$(date +%Y%m%d_%H%M%S)_$$_$RANDOM"
+        fi
+    fi
+}
 
 MICROBENCH_DIR="$PROJECT_DIR/microbench"
+SUITE_PATH="$RESULTS_DIR/microbench_suite.js"
 
+ensure_unique_results_dir
 mkdir -p "$RESULTS_DIR"
 
 # Create combined benchmark script that works across runtimes
@@ -20,13 +48,54 @@ BENCH_SCRIPT="$(cat \
     "$MICROBENCH_DIR/suite.js" \
 )"
 
+if [[ -n "${BENCH_FILTER:-}" ]]; then
+    FILTER_ESCAPED="${BENCH_FILTER//\\/\\\\}"
+    FILTER_ESCAPED="${FILTER_ESCAPED//\"/\\\"}"
+    BENCH_FILTER_HEADER="let __benchFilter = \"${FILTER_ESCAPED}\";"
+    BENCH_SCRIPT="${BENCH_FILTER_HEADER}"$'\n'"${BENCH_SCRIPT}"
+fi
+
+if [[ -n "${BENCH_HTTP_HANDLER_HEAVY_ITERATIONS:-}" ]]; then
+    BENCH_HEAVY_HEADER="let __httpHandlerHeavyIterations = ${BENCH_HTTP_HANDLER_HEAVY_ITERATIONS};"
+    BENCH_SCRIPT="${BENCH_HEAVY_HEADER}"$'\n'"${BENCH_SCRIPT}"
+fi
+
+if [[ -n "${BENCH_WARMUP_ITERATIONS:-}" || -n "${BENCH_MEASURED_ITERATIONS:-}" || -n "${BENCH_WARMUP_MS:-}" || -n "${BENCH_MAX_MEASURED_TOTAL_MS:-}" ]]; then
+    BENCH_CONFIG_BODY=""
+    if [[ -n "${BENCH_WARMUP_ITERATIONS:-}" ]]; then
+        BENCH_CONFIG_BODY="warmupIterations: ${BENCH_WARMUP_ITERATIONS}"
+    fi
+    if [[ -n "${BENCH_MEASURED_ITERATIONS:-}" ]]; then
+        if [[ -n "$BENCH_CONFIG_BODY" ]]; then
+            BENCH_CONFIG_BODY="${BENCH_CONFIG_BODY}, "
+        fi
+        BENCH_CONFIG_BODY="${BENCH_CONFIG_BODY}measuredIterations: ${BENCH_MEASURED_ITERATIONS}"
+    fi
+    if [[ -n "${BENCH_WARMUP_MS:-}" ]]; then
+        if [[ -n "$BENCH_CONFIG_BODY" ]]; then
+            BENCH_CONFIG_BODY="${BENCH_CONFIG_BODY}, "
+        fi
+        BENCH_CONFIG_BODY="${BENCH_CONFIG_BODY}warmupMs: ${BENCH_WARMUP_MS}"
+    fi
+    if [[ -n "${BENCH_MAX_MEASURED_TOTAL_MS:-}" ]]; then
+        if [[ -n "$BENCH_CONFIG_BODY" ]]; then
+            BENCH_CONFIG_BODY="${BENCH_CONFIG_BODY}, "
+        fi
+        BENCH_CONFIG_BODY="${BENCH_CONFIG_BODY}maxMeasuredTotalMs: ${BENCH_MAX_MEASURED_TOTAL_MS}"
+    fi
+    BENCH_CONFIG_HEADER="let __benchConfig = { ${BENCH_CONFIG_BODY} };"
+    BENCH_SCRIPT="${BENCH_CONFIG_HEADER}"$'\n'"${BENCH_SCRIPT}"
+fi
+
+printf '%s' "$BENCH_SCRIPT" > "$SUITE_PATH"
+
 run_microbench() {
     local runtime=$1
     local cmd=$2
 
     echo "=== Microbenchmarks: $runtime ==="
 
-    local output=$(echo "$BENCH_SCRIPT" | eval "$cmd" 2>/dev/null)
+    local output=$(eval "$cmd" 2>/dev/null)
 
     if [[ -n "$output" ]]; then
         cat > "$RESULTS_DIR/microbench_${runtime}.json" <<EOF
@@ -64,45 +133,7 @@ run_zigttp_microbench() {
 
     set +e
     local output
-    output=$("$zigttp_bin" --json --quiet 2>/dev/null | python3 -c '
-import json
-import sys
-
-name_map = {
-    "intArithmetic": "arithmetic",
-    "stringOps": "stringOps",
-    "objectCreate": "objectCreate",
-    "propertyAccess": "propertyAccess",
-    "functionCalls": "functionCalls",
-    "jsonOps": "jsonOps",
-}
-results = {}
-
-data = json.load(sys.stdin)
-benchmarks = data.get("benchmarks", [])
-
-for bench in benchmarks:
-    raw_name = bench.get("name")
-    if not raw_name:
-        continue
-    mapped_name = name_map.get(raw_name, raw_name)
-    if mapped_name in results:
-        continue
-    time_ms = float(bench.get("time_ms", 0))
-    ops = float(bench.get("ops_per_sec", 0))
-    entry = {
-        "name": mapped_name,
-        "ops_per_sec": ops,
-        "total_ms": time_ms,
-        "source_bench": raw_name,
-    }
-    iterations = bench.get("iterations")
-    if iterations:
-        entry["inner_iterations"] = iterations
-    results[mapped_name] = entry
-
-print(json.dumps(results, indent=2))
-')
+    output=$("$zigttp_bin" --script "$SUITE_PATH" 2>/dev/null)
     local status=$?
     set -e
 
@@ -119,7 +150,7 @@ print(json.dumps(results, indent=2))
     "runtime": "$runtime",
     "benchmarks": $output,
     "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-    "source": "zigttp-bench"
+    "source": "zigttp-bench-script"
 }
 EOF
         echo "$output" | python3 -c "
@@ -140,11 +171,11 @@ echo "Results: $RESULTS_DIR"
 echo ""
 
 if [[ "$RUNTIME" == "all" || "$RUNTIME" == "node" ]]; then
-    run_microbench "node" "node"
+    run_microbench "node" "node \"$SUITE_PATH\""
 fi
 
 if [[ "$RUNTIME" == "all" || "$RUNTIME" == "deno" ]]; then
-    run_microbench "deno" "deno run -"
+    run_microbench "deno" "deno run --quiet \"$SUITE_PATH\""
 fi
 
 if [[ "$RUNTIME" == "all" || "$RUNTIME" == "bun" ]]; then
@@ -158,7 +189,7 @@ if [[ "$RUNTIME" == "all" || "$RUNTIME" == "bun" ]]; then
     fi
 
     if [[ -n "$BUN_BIN" ]]; then
-        run_microbench "bun" "\"$BUN_BIN\" run -"
+        run_microbench "bun" "\"$BUN_BIN\" run \"$SUITE_PATH\""
     else
         echo "Bun not installed, skipping"
     fi

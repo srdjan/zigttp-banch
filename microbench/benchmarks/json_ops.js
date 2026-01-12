@@ -9,7 +9,7 @@ function runJsonOps(seed = 0) {
     obj.users[0].id = (seed & 0xff) + 1;
     obj.users[1].id = (seed & 0xff) + 2;
     let count = 0;
-    for (let i = 0; i < JSON_OPS_ITERATIONS; i++) {
+    for (let _ of range(JSON_OPS_ITERATIONS)) {
         const json = JSON.stringify(obj);
         const parsed = JSON.parse(json);
         count = (count + parsed.users.length) % 1000000;

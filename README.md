@@ -26,11 +26,34 @@ Comprehensive performance comparison of [zigttp](https://github.com/srdjan/zigtt
 ./scripts/run.sh microbench bun
 ./scripts/run.sh http zigttp
 
-# Save results to a custom directory
-./scripts/run_microbench.sh /tmp/zigttp_microbench all
+# Run microbenchmarks (results auto-saved under ./results)
+./scripts/run_microbench.sh all
 
 # Run microbenchmarks and emit a combined ops/sec table
-./scripts/run_microbench_table.sh /tmp/zigttp_microbench_table all
+./scripts/run_microbench_table.sh all
+```
+
+### Historical runs
+
+- Every run is stored under `results/<timestamp>_<pid>_<rand>/` and never overwrites previous output.
+- If you set `RESULTS_DIR`, a new unique directory will still be created if the target already exists and is non-empty.
+
+### Microbenchmark filtering and tuning
+
+You can run a subset of the microbench suite and tweak iteration counts via env vars:
+
+```bash
+# Run only httpHandlerHeavy with fewer inner iterations
+BENCH_FILTER=httpHandlerHeavy \
+BENCH_HTTP_HANDLER_HEAVY_ITERATIONS=200 \
+./scripts/run_microbench.sh all
+
+# Reduce warmup and measured iterations for faster smoke tests
+BENCH_WARMUP_ITERATIONS=5 \
+BENCH_MEASURED_ITERATIONS=8 \
+BENCH_WARMUP_MS=50 \
+BENCH_MAX_MEASURED_TOTAL_MS=500 \
+./scripts/run_microbench.sh all
 ```
 
 ## Prerequisites
@@ -80,6 +103,7 @@ Microbenchmarks testing core JS performance:
 - Function calls
 - JSON serialization
 - HTTP handler simulation
+- HTTP handler simulation (heavy)
 
 ### Cold Start
 Time from process spawn to first successful HTTP response.
@@ -98,6 +122,8 @@ Results are saved to `results/<timestamp>/` with:
 - `coldstart_*.json` - Cold start measurements
 - `memory_*.json` - Memory profiles
 - `report.md` - Generated analysis report
+
+Each run gets a unique results folder to preserve historical trends.
 
 ## Analysis
 

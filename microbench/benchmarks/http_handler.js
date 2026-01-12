@@ -5,7 +5,7 @@ const HTTP_HANDLER_ITERATIONS = 5000;
 
 function runHttpHandler(seed = 0) {
     let responses = 0;
-    for (let i = 0; i < HTTP_HANDLER_ITERATIONS; i++) {
+    for (let i of range(HTTP_HANDLER_ITERATIONS)) {
         const response = {
             status: 200,
             body: JSON.stringify({ id: (i + seed) % 100, name: 'User' + (seed & 7) })

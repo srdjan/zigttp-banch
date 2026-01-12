@@ -5,7 +5,7 @@ const OBJECT_CREATE_ITERATIONS = 50000;
 
 function runObjectCreate(seed = 0) {
     let objects = [];
-    for (let i = 0; i < OBJECT_CREATE_ITERATIONS; i++) {
+    for (let i of range(OBJECT_CREATE_ITERATIONS)) {
         objects.push({ id: i + seed, name: 'item' + (seed & 0x3) });
         if (objects.length > 100) {
             objects = [];

@@ -1,37 +1,101 @@
 // Universal microbenchmark runner
 // Works in Node.js, Deno, Bun, and zigttp
 
+if (typeof range === 'undefined') {
+    const rangeFactory = Function(
+        'n',
+        'var size = n | 0;' +
+            'if (size <= 0) { return []; }' +
+            'var arr = new Array(size);' +
+            'for (var i = 0; i < size; i++) { arr[i] = i; }' +
+            'return arr;'
+    );
+
+    function range(n) {
+        if (typeof n !== 'number' || n <= 0) return [];
+        return rangeFactory(n);
+    }
+    if (typeof globalThis !== 'undefined') {
+        globalThis.range = range;
+    }
+}
+
 const WARMUP_ITERATIONS = 20;
 const MEASURED_ITERATIONS = 30;
 const MIN_WARMUP_MS = 100;
 const MIN_TARGET_SAMPLE_MS = 20;
 const MAX_TARGET_SAMPLE_MS = 100;
-const MAX_BATCH_SIZE = 1_000_000;
+const MAX_BATCH_SIZE = 1000000;
+const MAX_OPS_PER_SAMPLE = 5000000;
+const MAX_MEASURED_TOTAL_MS = 2000;
 
 const benchState = { seed: 1, sink: 0 };
-if (typeof globalThis !== 'undefined') {
-    globalThis.__benchState = benchState;
-}
+
+const globalConfig =
+    typeof __benchConfig !== 'undefined' && __benchConfig && typeof __benchConfig === 'object'
+        ? __benchConfig
+        : null;
+
+const isZigttpRuntime =
+    typeof Response !== 'undefined' &&
+    typeof Response.json === 'function' &&
+    typeof Bun === 'undefined' &&
+    typeof Deno === 'undefined' &&
+    (typeof process === 'undefined' || !process.versions || !process.versions.node);
 
 function toMsFromNs(value) {
     if (typeof value === 'bigint') {
-        return Number(value) / 1_000_000;
+        return Number(value) / 1000000;
     }
-    return value / 1_000_000;
+    return value / 1000000;
+}
+
+function probeClock(now) {
+    let last = now();
+    for (let _ of range(6)) {
+        let spin = 0;
+        for (let __ of range(20000)) {
+            spin = spin + 1;
+        }
+        const current = now();
+        if (current > last) {
+            return true;
+        }
+        last = current;
+    }
+    return false;
 }
 
 function getClock() {
+    if (isZigttpRuntime) {
+        if (typeof Date !== 'undefined' && typeof Date.now === 'function') {
+            return { now: () => Date.now(), source: 'Date.now' };
+        }
+        return { now: () => 0, source: 'none' };
+    }
+    const candidates = [];
+    let candidateCount = 0;
     if (typeof Bun !== 'undefined' && typeof Bun.nanoseconds === 'function') {
-        return { now: () => toMsFromNs(Bun.nanoseconds()), source: 'Bun.nanoseconds' };
+        candidates[candidateCount] = { now: () => toMsFromNs(Bun.nanoseconds()), source: 'Bun.nanoseconds' };
+        candidateCount = candidateCount + 1;
     }
     if (typeof process !== 'undefined' && process.hrtime && typeof process.hrtime.bigint === 'function') {
-        return { now: () => toMsFromNs(process.hrtime.bigint()), source: 'process.hrtime.bigint' };
+        candidates[candidateCount] = { now: () => toMsFromNs(process.hrtime.bigint()), source: 'process.hrtime.bigint' };
+        candidateCount = candidateCount + 1;
     }
-    if (typeof performance !== 'undefined' && performance.now) {
-        return { now: () => performance.now(), source: 'performance.now' };
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+        candidates[candidateCount] = { now: () => performance.now(), source: 'performance.now' };
+        candidateCount = candidateCount + 1;
     }
-    if (typeof Date !== 'undefined') {
-        return { now: () => Date.now(), source: 'Date.now' };
+    if (typeof Date !== 'undefined' && typeof Date.now === 'function') {
+        candidates[candidateCount] = { now: () => Date.now(), source: 'Date.now' };
+        candidateCount = candidateCount + 1;
+    }
+    for (let i of range(candidateCount)) {
+        const candidate = candidates[i];
+        if (probeClock(candidate.now)) {
+            return candidate;
+        }
     }
     return { now: () => 0, source: 'none' };
 }
@@ -39,7 +103,7 @@ function getClock() {
 function estimateResolutionMs(now) {
     let last = now();
     let minDelta = Infinity;
-    for (let i = 0; i < 1000; i++) {
+    for (let _ of range(1000)) {
         const current = now();
         const delta = current - last;
         if (delta > 0 && delta < minDelta) {
@@ -50,10 +114,31 @@ function estimateResolutionMs(now) {
     return minDelta === Infinity ? 1 : minDelta;
 }
 
-function percentile(sorted, p) {
-    if (!sorted.length) return 0;
-    const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
+function percentileFromSorted(sorted, count, p) {
+    if (!count) return 0;
+    const idx = Math.min(count - 1, Math.max(0, Math.ceil(p * count) - 1));
     return sorted[idx];
+}
+
+function sortAscending(values, count) {
+    const arr = [];
+    for (let i of range(count)) {
+        arr[i] = values[i];
+    }
+    if (count <= 1) return arr;
+
+    for (let i of range(count - 1)) {
+        const limit = count - 1 - i;
+        for (let j of range(limit)) {
+            const a = arr[j];
+            const b = arr[j + 1];
+            if (a > b) {
+                arr[j] = b;
+                arr[j + 1] = a;
+            }
+        }
+    }
+    return arr;
 }
 
 function consume(value) {
@@ -68,7 +153,7 @@ function consume(value) {
 
 function runBatch(fn, batchSize) {
     let seed = benchState.seed;
-    for (let i = 0; i < batchSize; i++) {
+    for (let _ of range(batchSize)) {
         const result = fn(seed);
         consume(result);
         seed = (seed + 1) | 0;
@@ -76,21 +161,27 @@ function runBatch(fn, batchSize) {
     benchState.seed = seed;
 }
 
-function calibrateBatch(fn, now, targetSampleMs) {
+function calibrateBatch(fn, now, targetSampleMs, resolutionMs, maxBatchSize) {
     let batchSize = 1;
     let elapsed = 0;
 
-    for (let i = 0; i < 20; i++) {
-        const start = now();
-        runBatch(fn, batchSize);
-        elapsed = now() - start;
-        if (elapsed >= targetSampleMs) break;
-
-        if (elapsed <= 0) {
-            batchSize = Math.min(MAX_BATCH_SIZE, batchSize * 10);
-        } else {
-            const scale = targetSampleMs / elapsed;
-            batchSize = Math.min(MAX_BATCH_SIZE, Math.max(batchSize + 1, Math.ceil(batchSize * scale)));
+    let done = false;
+    for (let _ of range(20)) {
+        if (!done) {
+            const start = now();
+            runBatch(fn, batchSize);
+            elapsed = now() - start;
+            if (elapsed >= targetSampleMs) {
+                done = true;
+            } else if (elapsed <= 0) {
+                const fallbackMs = resolutionMs > 0 ? resolutionMs : 1;
+                elapsed = fallbackMs;
+                const scale = targetSampleMs / elapsed;
+                batchSize = Math.min(maxBatchSize, Math.max(batchSize + 1, Math.ceil(batchSize * scale)));
+            } else {
+                const scale = targetSampleMs / elapsed;
+                batchSize = Math.min(maxBatchSize, Math.max(batchSize + 1, Math.ceil(batchSize * scale)));
+            }
         }
     }
 
@@ -98,60 +189,197 @@ function calibrateBatch(fn, now, targetSampleMs) {
 }
 
 // Run a single benchmark
-function benchmark(name, fn, innerIterations, options = {}) {
+function benchmark(name, fn, innerIterations, options) {
     const clock = getClock();
     const now = clock.now;
+    const iterations =
+        (typeof innerIterations === 'number' && innerIterations > 0)
+            ? innerIterations
+            : 1;
+    const opts = options && typeof options === 'object' ? options : {};
+
+    const warmupIterations =
+        (opts.warmupIterations === undefined || opts.warmupIterations === null)
+            ? (globalConfig && globalConfig.warmupIterations !== undefined
+                ? globalConfig.warmupIterations
+                : WARMUP_ITERATIONS)
+            : opts.warmupIterations;
+    const measuredIterations =
+        (opts.measuredIterations === undefined || opts.measuredIterations === null)
+            ? (globalConfig && globalConfig.measuredIterations !== undefined
+                ? globalConfig.measuredIterations
+                : MEASURED_ITERATIONS)
+            : opts.measuredIterations;
+
+    if (isZigttpRuntime) {
+        for (let _ of range(warmupIterations)) {
+            runBatch(fn, 1);
+        }
+
+        const measuredIterationsFinal = measuredIterations;
+        let totalMs = 0;
+        let minMs = 0;
+        let maxMs = 0;
+        let count = 0;
+        for (let _ of range(measuredIterationsFinal)) {
+            const start = now();
+            runBatch(fn, 1);
+            const elapsed = now() - start;
+            totalMs = totalMs + elapsed;
+            if (count === 0 || elapsed < minMs) {
+                minMs = elapsed;
+            }
+            if (count === 0 || elapsed > maxMs) {
+                maxMs = elapsed;
+            }
+            count = count + 1;
+        }
+
+        const meanMs = count > 0 ? totalMs / count : 0;
+        const totalOps = iterations * measuredIterationsFinal;
+        const nsPerOp = totalOps > 0 ? (totalMs * 1000000) / totalOps : 0;
+        const opsPerSec = totalMs > 0 ? totalOps / (totalMs / 1000) : 0;
+
+        return {
+            name: name,
+            warmup_iterations: warmupIterations,
+            warmup_ms: 0,
+            measured_iterations: measuredIterationsFinal,
+            inner_iterations: iterations,
+            batch_size: 1,
+            total_ms: totalMs,
+            mean_ms: meanMs,
+            median_ms: meanMs,
+            p95_ms: maxMs,
+            min_ms: minMs,
+            max_ms: maxMs,
+            ns_per_op: nsPerOp,
+            ops_per_sec: opsPerSec,
+            clock_source: clock.source,
+            clock_resolution_ms: 0,
+            target_sample_ms: 0
+        };
+    }
+
     const resolutionMs = estimateResolutionMs(now);
     const targetSampleMs = Math.min(
         MAX_TARGET_SAMPLE_MS,
         Math.max(MIN_TARGET_SAMPLE_MS, resolutionMs * 50)
     );
+    const warmupMs =
+        (opts.warmupMs === undefined || opts.warmupMs === null)
+            ? (globalConfig && globalConfig.warmupMs !== undefined
+                ? globalConfig.warmupMs
+                : Math.max(MIN_WARMUP_MS, targetSampleMs))
+            : opts.warmupMs;
+    const maxMeasuredTotalMs =
+        (opts.maxMeasuredTotalMs === undefined || opts.maxMeasuredTotalMs === null)
+            ? (globalConfig && globalConfig.maxMeasuredTotalMs !== undefined
+                ? globalConfig.maxMeasuredTotalMs
+                : MAX_MEASURED_TOTAL_MS)
+            : opts.maxMeasuredTotalMs;
 
-    const warmupIterations = options.warmupIterations ?? WARMUP_ITERATIONS;
-    const measuredIterations = options.measuredIterations ?? MEASURED_ITERATIONS;
-    const warmupMs = options.warmupMs ?? Math.max(MIN_WARMUP_MS, targetSampleMs);
+    let maxBatchSize = MAX_BATCH_SIZE;
+    if (iterations > 0) {
+        const maxByOps = Math.floor(MAX_OPS_PER_SAMPLE / iterations);
+        if (maxByOps > 0) {
+            maxBatchSize = Math.min(maxBatchSize, maxByOps);
+        } else {
+            maxBatchSize = 1;
+        }
+    }
 
-    // Warmup phase (iterations + time-based)
-    for (let i = 0; i < warmupIterations; i++) {
+    // Warmup phase (iterations + time-based, capped for runtimes with coarse clocks)
+    for (let _ of range(warmupIterations)) {
         runBatch(fn, 1);
     }
     const warmupStart = now();
-    while ((now() - warmupStart) < warmupMs) {
-        runBatch(fn, 1);
+    let warmupTimeLimit = warmupIterations * 10;
+    if (warmupTimeLimit < 50) {
+        warmupTimeLimit = 50;
+    }
+    let warmed = false;
+    for (let _ of range(warmupTimeLimit)) {
+        if (!warmed) {
+            if ((now() - warmupStart) >= warmupMs) {
+                warmed = true;
+            } else {
+                runBatch(fn, 1);
+            }
+        }
     }
 
     // Calibrate batch size to get stable samples
-    const calibration = calibrateBatch(fn, now, targetSampleMs);
+    const calibration = calibrateBatch(fn, now, targetSampleMs, resolutionMs, maxBatchSize);
     const batchSize = calibration.batchSize;
 
-    // Measured phase
-    const results = [];
-    for (let i = 0; i < measuredIterations; i++) {
-        const start = now();
-        runBatch(fn, batchSize);
-        const elapsed = now() - start;
-        results.push(elapsed);
+    let measuredIterationsFinal = measuredIterations;
+    if (calibration.elapsed > 0 && maxMeasuredTotalMs > 0) {
+        const estimatedTotalMs = calibration.elapsed * measuredIterations;
+        if (estimatedTotalMs > maxMeasuredTotalMs) {
+            const scaled = Math.ceil(maxMeasuredTotalMs / calibration.elapsed);
+            measuredIterationsFinal = Math.max(5, Math.min(measuredIterations, scaled));
+        }
     }
 
-    // Calculate statistics
-    const totalMs = results.reduce((a, b) => a + b, 0);
-    const meanMs = totalMs / results.length;
-    const sorted = results.slice().sort((a, b) => a - b);
-    const medianMs = percentile(sorted, 0.5);
-    const p95Ms = percentile(sorted, 0.95);
-    const minMs = sorted[0] ?? 0;
-    const maxMs = sorted[sorted.length - 1] ?? 0;
+    // Measured phase
+    let totalMs = 0;
+    let minMs = 0;
+    let maxMs = 0;
+    let meanMs = 0;
+    let medianMs = 0;
+    let p95Ms = 0;
 
-    const iterations = Number(innerIterations) > 0 ? Number(innerIterations) : 1;
-    const totalOps = iterations * batchSize * measuredIterations;
-    const nsPerOp = totalOps > 0 ? (totalMs * 1_000_000) / totalOps : 0;
+    if (isZigttpRuntime) {
+        let count = 0;
+        for (let _ of range(measuredIterationsFinal)) {
+            const start = now();
+            runBatch(fn, batchSize);
+            const elapsed = now() - start;
+            totalMs = totalMs + elapsed;
+            if (count === 0 || elapsed < minMs) {
+                minMs = elapsed;
+            }
+            if (count === 0 || elapsed > maxMs) {
+                maxMs = elapsed;
+            }
+            count = count + 1;
+        }
+        meanMs = count > 0 ? totalMs / count : 0;
+        medianMs = meanMs;
+        p95Ms = maxMs;
+    } else {
+        const results = [];
+        let resultsCount = 0;
+        for (let _ of range(measuredIterationsFinal)) {
+            const start = now();
+            runBatch(fn, batchSize);
+            const elapsed = now() - start;
+            results[resultsCount] = elapsed;
+            resultsCount = resultsCount + 1;
+        }
+
+        // Calculate statistics
+        for (let i of range(resultsCount)) {
+            totalMs = totalMs + results[i];
+        }
+        meanMs = resultsCount > 0 ? totalMs / resultsCount : 0;
+        const sorted = sortAscending(results, resultsCount);
+        medianMs = percentileFromSorted(sorted, resultsCount, 0.5);
+        p95Ms = percentileFromSorted(sorted, resultsCount, 0.95);
+        minMs = resultsCount > 0 ? sorted[0] : 0;
+        maxMs = resultsCount > 0 ? sorted[resultsCount - 1] : 0;
+    }
+
+    const totalOps = iterations * batchSize * measuredIterationsFinal;
+    const nsPerOp = totalOps > 0 ? (totalMs * 1000000) / totalOps : 0;
     const opsPerSec = totalMs > 0 ? totalOps / (totalMs / 1000) : 0;
 
     return {
         name: name,
         warmup_iterations: warmupIterations,
         warmup_ms: warmupMs,
-        measured_iterations: measuredIterations,
+        measured_iterations: measuredIterationsFinal,
         inner_iterations: iterations,
         batch_size: batchSize,
         total_ms: totalMs,

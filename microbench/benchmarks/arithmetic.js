@@ -5,7 +5,7 @@ const ARITHMETIC_ITERATIONS = 50000;
 
 function runArithmetic(seed = 0) {
     let sum = seed | 0;
-    for (let i = 0; i < ARITHMETIC_ITERATIONS; i++) {
+    for (let i of range(ARITHMETIC_ITERATIONS)) {
         sum = (sum + i + seed) % 1000000;
         sum = (sum - ((i + seed) % 1000) + 1000000) % 1000000;
         sum = (sum * 2 + seed) % 1000000;
