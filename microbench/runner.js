@@ -68,6 +68,9 @@ function probeClock(now) {
 
 function getClock() {
     if (isZigttpRuntime) {
+        if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+            return { now: () => performance.now(), source: 'performance.now' };
+        }
         if (typeof Date !== 'undefined' && typeof Date.now === 'function') {
             return { now: () => Date.now(), source: 'Date.now' };
         }

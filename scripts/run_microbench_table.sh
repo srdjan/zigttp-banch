@@ -86,3 +86,97 @@ echo ""
 echo "Combined table written to: $TABLE_PATH"
 echo ""
 cat "$TABLE_PATH"
+
+DIFF_PATH="$RESULTS_DIR/microbench_table_diff.md"
+
+python3 - <<PY > "$DIFF_PATH"
+import json
+from pathlib import Path
+
+results_base = Path("$RESULTS_BASE")
+current = Path("$TABLE_PATH").resolve()
+
+def parse_table(path: Path):
+    text = path.read_text().strip().splitlines()
+    header = None
+    rows = []
+    for line in text:
+        if line.startswith("| Benchmark "):
+            header = [h.strip() for h in line.strip("|").split("|")]
+            continue
+        if header and line.startswith("|") and not line.startswith("|---"):
+            parts = [p.strip() for p in line.strip("|").split("|")]
+            if len(parts) != len(header):
+                continue
+            rows.append(dict(zip(header, parts)))
+    if not header:
+        return {}
+    data = {}
+    for row in rows:
+        bench = row["Benchmark"]
+        data[bench] = {}
+        for key, value in row.items():
+            if key == "Benchmark":
+                continue
+            if value == "-":
+                data[bench][key] = None
+            else:
+                data[bench][key] = float(value.replace(",", ""))
+    return data
+
+tables = sorted(
+    (p.resolve() for p in results_base.glob("*/microbench_table.md")),
+    key=lambda p: p.stat().st_mtime,
+)
+
+prev = None
+for path in reversed(tables):
+    if path == current:
+        continue
+    prev = path
+    break
+
+if prev is None:
+    print("No previous microbench_table.md found; diff skipped.")
+    raise SystemExit(0)
+
+prev_data = parse_table(prev)
+new_data = parse_table(current)
+
+if not new_data:
+    print("Current microbench_table.md missing or unreadable; diff skipped.")
+    raise SystemExit(0)
+
+runtimes = sorted({rt for bench in new_data.values() for rt in bench.keys()})
+
+def fmt_pct(old, new):
+    if old is None or new is None or old == 0:
+        return "-"
+    pct = (new - old) / old * 100
+    sign = "+" if pct > 0 else ""
+    return f"{sign}{pct:.2f}%"
+
+lines = []
+lines.append(f"Previous: {prev.relative_to(results_base)}")
+lines.append(f"Current: {current.relative_to(results_base)}")
+lines.append("")
+lines.append("| Benchmark | " + " | ".join(runtimes) + " |")
+lines.append("|" + "|".join(["---"] * (len(runtimes) + 1)) + "|")
+
+for bench in sorted(new_data.keys()):
+    row = [bench]
+    for runtime in runtimes:
+        old = prev_data.get(bench, {}).get(runtime)
+        new = new_data.get(bench, {}).get(runtime)
+        row.append(fmt_pct(old, new))
+    lines.append("| " + " | ".join(row) + " |")
+
+print("\\n".join(lines))
+PY
+
+if [[ -s "$DIFF_PATH" ]]; then
+    echo ""
+    echo "Diff table written to: $DIFF_PATH"
+    echo ""
+    cat "$DIFF_PATH"
+fi

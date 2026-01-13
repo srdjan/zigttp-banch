@@ -103,10 +103,39 @@ fi
 
 printf '%s' "$BENCH_SCRIPT" > "$SUITE_PATH"
 
-ZIGTTP_BIN="${ZIGTTP_BIN:-$PROJECT_DIR/../zigttp/zig-out/bin/zigttp-bench}"
+ZIGTP_PROJECT_DIR="${ZIGTP_PROJECT_DIR:-$PROJECT_DIR/../zigttp}"
+ZIGTP_BUILD_FLAGS="${ZIGTP_BUILD_FLAGS:--Doptimize=ReleaseFast}"
+ZIGTP_AUTO_RELEASE_BUILD="false"
+
+if [[ -z "${ZIGTTP_BIN:-}" ]]; then
+    ZIGTTP_BIN="$ZIGTP_PROJECT_DIR/zig-out/bin/zigttp-bench"
+    ZIGTP_AUTO_RELEASE_BUILD="true"
+fi
+
+build_zigttp_bench_release() {
+    if [[ -n "${ZIGTP_SKIP_RELEASE_BUILD:-}" ]]; then
+        return
+    fi
+
+    if ! command -v zig &> /dev/null; then
+        echo "zig not found; install Zig to build zigttp-bench"
+        exit 1
+    fi
+
+    echo "Building zigttp-bench release (bench $ZIGTP_BUILD_FLAGS)"
+    (
+        cd "$ZIGTP_PROJECT_DIR"
+        zig build bench $ZIGTP_BUILD_FLAGS
+    )
+}
+
+if [[ "$ZIGTP_AUTO_RELEASE_BUILD" == "true" ]]; then
+    build_zigttp_bench_release
+fi
+
 if [[ ! -x "$ZIGTTP_BIN" ]]; then
     echo "zigttp-bench not found at $ZIGTTP_BIN"
-    echo "Build it first: cd ../zigttp && zig build bench -Doptimize=ReleaseFast"
+    echo "Build it first: cd ../zigttp && zig build bench $ZIGTP_BUILD_FLAGS"
     exit 1
 fi
 
