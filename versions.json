@@ -9,18 +9,9 @@
       "build_command": "zig build -Doptimize=ReleaseFast",
       "handler": "../zigttp/examples/handler.jsx"
     },
-    "node": {
-      "version": "22.21.0",
-      "binary": "node"
-    },
     "deno": {
       "version": "2.6.4",
       "binary": "deno"
-    },
-    "bun": {
-      "version": "TBD",
-      "binary": "bun",
-      "install_command": "curl -fsSL https://bun.sh/install | bash"
     }
   },
   "tools": {

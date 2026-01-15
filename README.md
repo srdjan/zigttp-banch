@@ -1,6 +1,6 @@
 # zigttp Benchmark Suite
 
-Comprehensive performance comparison of [zigttp](https://github.com/srdjan/zigttp) against Node.js, Deno, and Bun.
+Comprehensive performance comparison of [zigttp](https://github.com/srdjan/zigttp) against Deno.
 
 ## Quick Start
 
@@ -21,9 +21,8 @@ Comprehensive performance comparison of [zigttp](https://github.com/srdjan/zigtt
 ## Running Benchmarks
 
 ```bash
-# Run a specific runtime only (node|deno|bun|zigttp)
-./scripts/run.sh microbench node
-./scripts/run.sh microbench bun
+# Run a specific runtime only (deno|zigttp)
+./scripts/run.sh microbench deno
 ./scripts/run.sh http zigttp
 
 # Run microbenchmarks (results auto-saved under ./results)
@@ -73,9 +72,7 @@ The SVG is saved under `results/<timestamp>/flamegraph.svg`.
 
 ## Prerequisites
 
-- Node.js (tested with v22.21.0)
 - Deno (tested with v2.6.4)
-- Bun (optional, install with `curl -fsSL https://bun.sh/install | bash`)
 - hey (HTTP load testing tool)
 - zigttp built with release optimizations
 

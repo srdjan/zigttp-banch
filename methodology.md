@@ -2,7 +2,7 @@
 
 ## Overview
 
-This benchmark suite compares zigttp against Node.js, Bun, and Deno across HTTP throughput, JavaScript execution speed, memory usage, and cold start times.
+This benchmark suite compares zigttp against Deno across HTTP throughput, JavaScript execution speed, memory usage, and cold start times.
 
 ## Test Environment
 

@@ -1,5 +1,5 @@
 // Universal microbenchmark runner
-// Works in Node.js, Deno, Bun, and zigttp
+// Works in Deno and zigttp
 
 if (typeof range === 'undefined') {
     const rangeFactory = Function(
@@ -39,9 +39,7 @@ const globalConfig =
 const isZigttpRuntime =
     typeof Response !== 'undefined' &&
     typeof Response.json === 'function' &&
-    typeof Bun === 'undefined' &&
-    typeof Deno === 'undefined' &&
-    (typeof process === 'undefined' || !process.versions || !process.versions.node);
+    typeof Deno === 'undefined';
 
 function toMsFromNs(value) {
     if (typeof value === 'bigint') {
@@ -78,14 +76,6 @@ function getClock() {
     }
     const candidates = [];
     let candidateCount = 0;
-    if (typeof Bun !== 'undefined' && typeof Bun.nanoseconds === 'function') {
-        candidates[candidateCount] = { now: () => toMsFromNs(Bun.nanoseconds()), source: 'Bun.nanoseconds' };
-        candidateCount = candidateCount + 1;
-    }
-    if (typeof process !== 'undefined' && process.hrtime && typeof process.hrtime.bigint === 'function') {
-        candidates[candidateCount] = { now: () => toMsFromNs(process.hrtime.bigint()), source: 'process.hrtime.bigint' };
-        candidateCount = candidateCount + 1;
-    }
     if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
         candidates[candidateCount] = { now: () => performance.now(), source: 'performance.now' };
         candidateCount = candidateCount + 1;
@@ -401,17 +391,12 @@ function benchmark(name, fn, innerIterations, options) {
 
 // Detect runtime
 function detectRuntime() {
-    if (typeof Bun !== 'undefined') return 'bun';
     if (typeof Deno !== 'undefined') return 'deno';
-    if (typeof process !== 'undefined' && process.versions && process.versions.node) return 'node';
     if (typeof Response !== 'undefined' && typeof Response.json === 'function') return 'zigttp';
     return 'unknown';
 }
 
 // Export for module systems
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { benchmark, detectRuntime, WARMUP_ITERATIONS, MEASURED_ITERATIONS };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.benchmark = benchmark;
     globalThis.detectRuntime = detectRuntime;

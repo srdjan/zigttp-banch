@@ -2,7 +2,7 @@
 # Main benchmark orchestration script
 # Usage: ./run.sh [mode] [runtime] [connections]
 #   mode: full|http|microbench|coldstart|memory|quick
-#   runtime: all|node|deno|bun|zigttp
+#   runtime: all|deno|zigttp
 #   connections: number of concurrent connections for HTTP tests
 
 set -euo pipefail

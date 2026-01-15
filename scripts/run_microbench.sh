@@ -170,29 +170,8 @@ echo "Microbenchmark Suite"
 echo "Results: $RESULTS_DIR"
 echo ""
 
-if [[ "$RUNTIME" == "all" || "$RUNTIME" == "node" ]]; then
-    run_microbench "node" "node \"$SUITE_PATH\""
-fi
-
 if [[ "$RUNTIME" == "all" || "$RUNTIME" == "deno" ]]; then
     run_microbench "deno" "deno run --quiet \"$SUITE_PATH\""
-fi
-
-if [[ "$RUNTIME" == "all" || "$RUNTIME" == "bun" ]]; then
-    BUN_BIN=""
-    if command -v bun &> /dev/null; then
-        BUN_BIN="$(command -v bun)"
-    elif [[ -n "${BUN_INSTALL:-}" && -x "$BUN_INSTALL/bin/bun" ]]; then
-        BUN_BIN="$BUN_INSTALL/bin/bun"
-    elif [[ -x "$HOME/.bun/bin/bun" ]]; then
-        BUN_BIN="$HOME/.bun/bin/bun"
-    fi
-
-    if [[ -n "$BUN_BIN" ]]; then
-        run_microbench "bun" "\"$BUN_BIN\" run \"$SUITE_PATH\""
-    else
-        echo "Bun not installed, skipping"
-    fi
 fi
 
 if [[ "$RUNTIME" == "all" || "$RUNTIME" == "zigttp" ]]; then

@@ -121,20 +121,8 @@ echo "Cold Start Benchmark Suite"
 echo "Results: $RESULTS_DIR"
 echo ""
 
-if [[ "$RUNTIME" == "all" || "$RUNTIME" == "node" ]]; then
-    run_coldstart "node" "\"PORT=$PORT node $PROJECT_DIR/handlers/node/server.js\""
-fi
-
 if [[ "$RUNTIME" == "all" || "$RUNTIME" == "deno" ]]; then
     run_coldstart "deno" "\"PORT=$PORT deno run --allow-net --allow-env $PROJECT_DIR/handlers/deno/server.ts\""
-fi
-
-if [[ "$RUNTIME" == "all" || "$RUNTIME" == "bun" ]]; then
-    if command -v bun &> /dev/null; then
-        run_coldstart "bun" "\"PORT=$PORT bun run $PROJECT_DIR/handlers/bun/server.ts\""
-    else
-        echo "Bun not installed, skipping"
-    fi
 fi
 
 if [[ "$RUNTIME" == "all" || "$RUNTIME" == "zigttp" ]]; then

@@ -22,9 +22,7 @@ else
 fi
 
 # Get runtime versions
-NODE_VERSION=$(node --version 2>/dev/null || echo "not installed")
 DENO_VERSION=$(deno --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed")
-BUN_VERSION=$(bun --version 2>/dev/null || echo "not installed")
 
 # Output JSON
 cat <<EOF
@@ -37,9 +35,7 @@ cat <<EOF
     "cpu_cores": $CPU_CORES,
     "ram_gb": $RAM_GB,
     "runtimes": {
-        "node": "$NODE_VERSION",
-        "deno": "$DENO_VERSION",
-        "bun": "$BUN_VERSION"
+        "deno": "$DENO_VERSION"
     }
 }
 EOF

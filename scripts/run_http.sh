@@ -148,7 +148,7 @@ run_benchmark() {
     local latency_p50=$(echo "$hey_output" | grep "50% in" | awk '{print $3}')
     local latency_p95=$(echo "$hey_output" | grep "95% in" | awk '{print $3}')
     local latency_p99=$(echo "$hey_output" | grep "99% in" | awk '{print $3}')
-    local errors=$(echo "$hey_output" | grep -E "^\s*\[" | grep -v "200" | wc -l | xargs)
+    local errors=$(echo "$hey_output" | awk '/^[[:space:]]*\[/ { if ($0 !~ /200/) count++ } END { print (count+0) }')
 
     cat > "$output_file" <<EOF
 {
@@ -184,14 +184,8 @@ run_runtime() {
     ensure_port_free
 
     case "$runtime" in
-        node)
-            server_cmd="PORT=$PORT node $PROJECT_DIR/handlers/node/server.js"
-            ;;
         deno)
             server_cmd="PORT=$PORT deno run --allow-net --allow-env $PROJECT_DIR/handlers/deno/server.ts"
-            ;;
-        bun)
-            server_cmd="PORT=$PORT bun run $PROJECT_DIR/handlers/bun/server.ts"
             ;;
         zigttp)
             server_cmd="$ZIGTTP_BIN -p $PORT -q $PROJECT_DIR/handlers/zigttp/handler.js"
@@ -241,20 +235,8 @@ echo "Results: $RESULTS_DIR"
 echo "Connections: $CONNECTIONS"
 echo ""
 
-if [[ "$RUNTIME" == "all" || "$RUNTIME" == "node" ]]; then
-    run_runtime "node"
-fi
-
 if [[ "$RUNTIME" == "all" || "$RUNTIME" == "deno" ]]; then
     run_runtime "deno"
-fi
-
-if [[ "$RUNTIME" == "all" || "$RUNTIME" == "bun" ]]; then
-    if command -v bun &> /dev/null; then
-        run_runtime "bun"
-    else
-        echo "Bun not installed, skipping"
-    fi
 fi
 
 if [[ "$RUNTIME" == "all" || "$RUNTIME" == "zigttp" ]]; then
