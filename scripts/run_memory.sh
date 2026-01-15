@@ -2,16 +2,25 @@
 # Memory profiling runner
 # Measures baseline RSS and RSS under load
 
-set -euo pipefail
+set -u
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 RESULTS_DIR="${1:-$PROJECT_DIR/results/$(date +%Y%m%d_%H%M%S)}"
 RUNTIME="${2:-all}"
 
-PORT=8080
+# Unique ports per runtime
+PORT_DENO=8080
+PORT_ZIGTTP=8081
+PORT=""  # Set per-runtime
+
 LOAD_DURATION=30
 SAMPLE_INTERVAL_MS=100
+
+# Track status
+STATUS_DENO=""
+STATUS_ZIGTTP=""
+COOLDOWN_SECS=2
 
 mkdir -p "$RESULTS_DIR"
 
@@ -107,17 +116,57 @@ echo "Memory Profiling Suite"
 echo "Results: $RESULTS_DIR"
 echo ""
 
-if [[ "$RUNTIME" == "all" || "$RUNTIME" == "deno" ]]; then
-    run_memory_profile "deno" "PORT=$PORT deno run --allow-net --allow-env $PROJECT_DIR/handlers/deno/server.ts"
+runtimes_to_run=""
+runtime_count=0
+
+if [ "$RUNTIME" = "all" ] || [ "$RUNTIME" = "deno" ]; then
+    runtimes_to_run="deno"
+    runtime_count=$((runtime_count + 1))
 fi
 
-if [[ "$RUNTIME" == "all" || "$RUNTIME" == "zigttp" ]]; then
+if [ "$RUNTIME" = "all" ] || [ "$RUNTIME" = "zigttp" ]; then
     ZIGTTP_BIN="$PROJECT_DIR/../zigttp/zig-out/bin/zigttp-server"
-    if [[ -x "$ZIGTTP_BIN" ]]; then
-        run_memory_profile "zigttp" "$ZIGTTP_BIN -p $PORT -q $PROJECT_DIR/handlers/zigttp/handler.js"
+    if [ -x "$ZIGTTP_BIN" ]; then
+        if [ -n "$runtimes_to_run" ]; then
+            runtimes_to_run="$runtimes_to_run zigttp"
+        else
+            runtimes_to_run="zigttp"
+        fi
+        runtime_count=$((runtime_count + 1))
     else
         echo "zigttp not built, skipping"
+        STATUS_ZIGTTP="skipped:not built"
     fi
 fi
 
+current_idx=0
+for runtime in $runtimes_to_run; do
+    case "$runtime" in
+        deno)
+            PORT=$PORT_DENO
+            run_memory_profile "deno" "PORT=$PORT deno run --allow-net --allow-env $PROJECT_DIR/handlers/deno/server.ts" && STATUS_DENO="success" || STATUS_DENO="failed"
+            ;;
+        zigttp)
+            PORT=$PORT_ZIGTTP
+            run_memory_profile "zigttp" "$ZIGTTP_BIN -p $PORT -q $PROJECT_DIR/handlers/zigttp/handler.js" && STATUS_ZIGTTP="success" || STATUS_ZIGTTP="failed"
+            ;;
+    esac
+
+    current_idx=$((current_idx + 1))
+    if [ $current_idx -lt $runtime_count ]; then
+        echo "Cooldown: ${COOLDOWN_SECS}s before next runtime..."
+        sleep "$COOLDOWN_SECS"
+    fi
+done
+
 echo "=== Memory Profiling Complete ==="
+echo ""
+echo "Runtime Status:"
+if [ -n "$STATUS_DENO" ]; then
+    echo "  deno: $STATUS_DENO"
+fi
+if [ -n "$STATUS_ZIGTTP" ]; then
+    echo "  zigttp: $STATUS_ZIGTTP"
+fi
+
+exit 0

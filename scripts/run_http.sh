@@ -2,7 +2,7 @@
 # HTTP benchmark runner
 # Usage: ./run_http.sh <results_dir> [runtime] [connections]
 
-set -euo pipefail
+set -u
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -10,52 +10,50 @@ RESULTS_DIR="${1:-$PROJECT_DIR/results/$(date +%Y%m%d_%H%M%S)}"
 RUNTIME="${2:-all}"
 CONNECTIONS="${3:-10}"
 
-PORT="${PORT:-8080}"
+# Unique base ports per runtime to avoid conflicts
+PORT_DENO=8080
+PORT_ZIGTTP=8081
+
+PORT=""  # Set per-runtime
 WARMUP_REQUESTS=1000
 DURATION="30s"
-ENDPOINTS=("/api/health" "/api/echo" "/api/greet/world")
+ENDPOINTS="/api/health /api/echo /api/greet/world"
+COOLDOWN_SECS=2
+
+# Track runtime results (bash 3.x compatible)
+STATUS_DENO=""
+STATUS_ZIGTTP=""
 
 mkdir -p "$RESULTS_DIR"
 
 CURRENT_SERVER_PID=""
-CURRENT_SERVER_PGID=""
-
-get_pgid() {
-    local pid=$1
-    if command -v ps &> /dev/null; then
-        ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' '
-    fi
-}
 
 stop_server() {
     local pid="${1:-}"
-    local pgid="${2:-}"
+    # Note: Removed PGID killing as it can kill the script itself
 
-    if [[ -n "$pid" ]]; then
+    if [ -n "$pid" ]; then
         kill "$pid" 2>/dev/null || true
-    fi
-    if [[ -n "$pgid" ]]; then
-        kill "-$pgid" 2>/dev/null || true
-    fi
 
-    if [[ -n "$pid" ]]; then
-        for _ in {1..20}; do
+        # Wait for process to die
+        local attempts=0
+        while [ $attempts -lt 20 ]; do
             if ! kill -0 "$pid" 2>/dev/null; then
                 break
             fi
+            attempts=$((attempts + 1))
             sleep 0.1
         done
+
+        # Force kill if still running
         if kill -0 "$pid" 2>/dev/null; then
             kill -9 "$pid" 2>/dev/null || true
         fi
     fi
-    if [[ -n "$pgid" ]]; then
-        kill -9 "-$pgid" 2>/dev/null || true
-    fi
 }
 
 cleanup_on_exit() {
-    stop_server "$CURRENT_SERVER_PID" "$CURRENT_SERVER_PGID"
+    stop_server "$CURRENT_SERVER_PID"
 }
 
 trap cleanup_on_exit EXIT INT TERM
@@ -150,6 +148,14 @@ run_benchmark() {
     local latency_p99=$(echo "$hey_output" | grep "99% in" | awk '{print $3}')
     local errors=$(echo "$hey_output" | awk '/^[[:space:]]*\[/ { if ($0 !~ /200/) count++ } END { print (count+0) }')
 
+    # Default to 0 if empty
+    rps="${rps:-0}"
+    latency_avg="${latency_avg:-0}"
+    latency_p50="${latency_p50:-0}"
+    latency_p95="${latency_p95:-0}"
+    latency_p99="${latency_p99:-0}"
+    errors="${errors:-0}"
+
     cat > "$output_file" <<EOF
 {
     "type": "http_benchmark",
@@ -159,18 +165,38 @@ run_benchmark() {
     "duration": "$DURATION",
     "warmup_requests": $WARMUP_REQUESTS,
     "metrics": {
-        "requests_per_second": ${rps:-0},
-        "latency_avg_secs": ${latency_avg:-0},
-        "latency_p50_secs": ${latency_p50:-0},
-        "latency_p95_secs": ${latency_p95:-0},
-        "latency_p99_secs": ${latency_p99:-0},
-        "errors": ${errors:-0}
+        "requests_per_second": $rps,
+        "latency_avg_secs": $latency_avg,
+        "latency_p50_secs": $latency_p50,
+        "latency_p95_secs": $latency_p95,
+        "latency_p99_secs": $latency_p99,
+        "errors": $errors
     },
     "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
 
     echo "    RPS: $rps, p99: ${latency_p99}s"
+}
+
+# Helper to set runtime status (bash 3.x compatible)
+set_runtime_status() {
+    local runtime=$1
+    local status=$2
+    case "$runtime" in
+        deno) STATUS_DENO="$status" ;;
+        zigttp) STATUS_ZIGTTP="$status" ;;
+    esac
+}
+
+# Helper to get port for runtime
+get_runtime_port() {
+    local runtime=$1
+    case "$runtime" in
+        deno) echo "$PORT_DENO" ;;
+        zigttp) echo "$PORT_ZIGTTP" ;;
+        *) echo "8080" ;;
+    esac
 }
 
 # Function to run all benchmarks for a runtime
@@ -181,6 +207,8 @@ run_runtime() {
 
     echo "=== Benchmarking $runtime ==="
 
+    # Use runtime-specific base port
+    PORT="$(get_runtime_port "$runtime")"
     ensure_port_free
 
     case "$runtime" in
@@ -192,6 +220,7 @@ run_runtime() {
             ;;
         *)
             echo "Unknown runtime: $runtime"
+            set_runtime_status "$runtime" "unknown"
             return 1
             ;;
     esac
@@ -200,31 +229,36 @@ run_runtime() {
     eval "$server_cmd" &
     server_pid=$!
     CURRENT_SERVER_PID="$server_pid"
-    CURRENT_SERVER_PGID="$(get_pgid "$server_pid")"
     sleep 2
 
     if ! wait_for_server; then
         echo "Failed to start $runtime server"
-        stop_server "$CURRENT_SERVER_PID" "$CURRENT_SERVER_PGID"
+        stop_server "$CURRENT_SERVER_PID"
         CURRENT_SERVER_PID=""
-        CURRENT_SERVER_PGID=""
+        set_runtime_status "$runtime" "failed:startup"
         return 1
     fi
 
     # Run benchmarks for each endpoint
-    for endpoint in "${ENDPOINTS[@]}"; do
-        run_benchmark "$runtime" "$endpoint" "$CONNECTIONS"
+    local benchmark_errors=0
+    for endpoint in $ENDPOINTS; do
+        if ! run_benchmark "$runtime" "$endpoint" "$CONNECTIONS"; then
+            benchmark_errors=$((benchmark_errors + 1))
+        fi
     done
 
     # Kill server
-    stop_server "$CURRENT_SERVER_PID" "$CURRENT_SERVER_PGID"
+    stop_server "$CURRENT_SERVER_PID"
     CURRENT_SERVER_PID=""
-    CURRENT_SERVER_PGID=""
     if ! wait_for_port_free; then
         echo "Warning: port $PORT still in use after stopping $runtime, picking a new port"
-        PORT="$(pick_free_port)"
     fi
-    sleep 1
+
+    if [ $benchmark_errors -eq 0 ]; then
+        set_runtime_status "$runtime" "success"
+    else
+        set_runtime_status "$runtime" "partial:$benchmark_errors errors"
+    fi
 
     echo ""
 }
@@ -235,17 +269,50 @@ echo "Results: $RESULTS_DIR"
 echo "Connections: $CONNECTIONS"
 echo ""
 
-if [[ "$RUNTIME" == "all" || "$RUNTIME" == "deno" ]]; then
-    run_runtime "deno"
+runtimes_to_run=""
+runtime_count=0
+
+if [ "$RUNTIME" = "all" ] || [ "$RUNTIME" = "deno" ]; then
+    runtimes_to_run="deno"
+    runtime_count=$((runtime_count + 1))
 fi
 
-if [[ "$RUNTIME" == "all" || "$RUNTIME" == "zigttp" ]]; then
+if [ "$RUNTIME" = "all" ] || [ "$RUNTIME" = "zigttp" ]; then
     ZIGTTP_BIN="$PROJECT_DIR/../zigttp/zig-out/bin/zigttp-server"
-    if [[ -x "$ZIGTTP_BIN" ]]; then
-        run_runtime "zigttp"
+    if [ -x "$ZIGTTP_BIN" ]; then
+        if [ -n "$runtimes_to_run" ]; then
+            runtimes_to_run="$runtimes_to_run zigttp"
+        else
+            runtimes_to_run="zigttp"
+        fi
+        runtime_count=$((runtime_count + 1))
     else
         echo "zigttp not built, skipping (run: cd ../zigttp && zig build -Doptimize=ReleaseFast)"
+        STATUS_ZIGTTP="skipped:not built"
     fi
 fi
 
+# Run each runtime with cooldown between them
+current_idx=0
+for runtime in $runtimes_to_run; do
+    run_runtime "$runtime" || true  # Continue even if runtime fails
+
+    current_idx=$((current_idx + 1))
+    # Add cooldown between runtimes (not after the last one)
+    if [ $current_idx -lt $runtime_count ]; then
+        echo "Cooldown: ${COOLDOWN_SECS}s before next runtime..."
+        sleep "$COOLDOWN_SECS"
+    fi
+done
+
 echo "=== HTTP Benchmarks Complete ==="
+echo ""
+echo "Runtime Status:"
+if [ -n "$STATUS_DENO" ]; then
+    echo "  deno: $STATUS_DENO"
+fi
+if [ -n "$STATUS_ZIGTTP" ]; then
+    echo "  zigttp: $STATUS_ZIGTTP"
+fi
+
+exit 0

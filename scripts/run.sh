@@ -5,7 +5,7 @@
 #   runtime: all|deno|zigttp
 #   connections: number of concurrent connections for HTTP tests
 
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -38,33 +38,33 @@ case "$MODE" in
         # Quick validation run
         echo ""
         echo "=== Quick Validation ==="
-        "$SCRIPT_DIR/run_http.sh" "$RESULTS_DIR" "$RUNTIME" 1
+        "$SCRIPT_DIR/run_http.sh" "$RESULTS_DIR" "$RUNTIME" 1 || true
         ;;
     http)
         echo ""
-        "$SCRIPT_DIR/run_http.sh" "$RESULTS_DIR" "$RUNTIME" "$CONNECTIONS"
+        "$SCRIPT_DIR/run_http.sh" "$RESULTS_DIR" "$RUNTIME" "$CONNECTIONS" || true
         ;;
     microbench)
         echo ""
-        RESULTS_DIR="$RESULTS_DIR" "$SCRIPT_DIR/run_microbench.sh" "$RUNTIME"
+        RESULTS_DIR="$RESULTS_DIR" "$SCRIPT_DIR/run_microbench.sh" "$RUNTIME" || true
         ;;
     coldstart)
         echo ""
-        "$SCRIPT_DIR/run_coldstart.sh" "$RESULTS_DIR" "$RUNTIME" 50
+        "$SCRIPT_DIR/run_coldstart.sh" "$RESULTS_DIR" "$RUNTIME" 50 || true
         ;;
     memory)
         echo ""
-        "$SCRIPT_DIR/run_memory.sh" "$RESULTS_DIR" "$RUNTIME"
+        "$SCRIPT_DIR/run_memory.sh" "$RESULTS_DIR" "$RUNTIME" || true
         ;;
     full)
         echo ""
-        "$SCRIPT_DIR/run_http.sh" "$RESULTS_DIR" "$RUNTIME" "$CONNECTIONS"
+        "$SCRIPT_DIR/run_http.sh" "$RESULTS_DIR" "$RUNTIME" "$CONNECTIONS" || true
         echo ""
-        RESULTS_DIR="$RESULTS_DIR" "$SCRIPT_DIR/run_microbench.sh" "$RUNTIME"
+        RESULTS_DIR="$RESULTS_DIR" "$SCRIPT_DIR/run_microbench.sh" "$RUNTIME" || true
         echo ""
-        "$SCRIPT_DIR/run_coldstart.sh" "$RESULTS_DIR" "$RUNTIME" 50
+        "$SCRIPT_DIR/run_coldstart.sh" "$RESULTS_DIR" "$RUNTIME" 50 || true
         echo ""
-        "$SCRIPT_DIR/run_memory.sh" "$RESULTS_DIR" "$RUNTIME"
+        "$SCRIPT_DIR/run_memory.sh" "$RESULTS_DIR" "$RUNTIME" || true
         ;;
     *)
         echo "Unknown mode: $MODE"
