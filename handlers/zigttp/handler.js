@@ -14,36 +14,36 @@ function fibonacci(n) {
 }
 
 function handler(request) {
-    const path = request.path;
+    const url = request.url;
 
     // /api/health - Health check
-    if (path === '/api/health') {
-        return Response.text('{"status":"ok","runtime":"zigttp","timestamp":0}');
+    if (url === '/api/health') {
+        return Response.json({status: 'ok', runtime: 'zigttp', timestamp: 0});
     }
 
     // /api/echo - Echo request details
-    if (path === '/api/echo') {
-        return Response.text('{"ok":true}');
+    if (url === '/api/echo') {
+        return Response.json({ok: true});
     }
 
     // /api/json - Echo JSON body (POST)
-    if (path === '/api/json') {
-        return Response.text('{"error":"Not Implemented"}');
+    if (url === '/api/json') {
+        return Response.json({error: 'Not Implemented'});
     }
 
     // /api/greet/:name - Greeting with path parameter
-    if (path.indexOf('/api/greet/') === 0) {
-        const name = path.substring('/api/greet/'.length);
-        return Response.text('{"greeting":"Hello, ' + name + '!"}');
+    if (url.indexOf('/api/greet/') === 0) {
+        const name = url.substring('/api/greet/'.length);
+        return Response.json({greeting: 'Hello, ' + name + '!'});
     }
 
     // /api/compute - Fibonacci computation
-    if (path === '/api/compute') {
+    if (url === '/api/compute') {
         const n = 30;
         const result = fibonacci(n);
-        return Response.text('{"computation":"fibonacci","n":' + n + ',"result":' + result + '}');
+        return Response.json({computation: 'fibonacci', n: n, result: result});
     }
 
     // 404 for everything else
-    return Response.text('{"error":"Not Found","url":"' + path + '"}');
+    return Response.json({error: 'Not Found', url: url}, {status: 404});
 }
