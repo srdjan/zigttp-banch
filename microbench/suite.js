@@ -12,6 +12,13 @@ let filterFunctionCalls = false;
 let filterJsonOps = false;
 let filterHttpHandler = false;
 let filterHttpHandlerHeavy = false;
+let filterStringBuild = false;
+let filterDynamicProps = false;
+let filterArrayOps = false;
+let filterNestedAccess = false;
+let filterQueryParsing = false;
+let filterParseInt = false;
+let filterMathOps = false;
 
 if (hasFilter) {
     let start = 0;
@@ -36,6 +43,20 @@ if (hasFilter) {
                 filterHttpHandler = true;
             } else if (name === 'httpHandlerHeavy') {
                 filterHttpHandlerHeavy = true;
+            } else if (name === 'stringBuild') {
+                filterStringBuild = true;
+            } else if (name === 'dynamicProps') {
+                filterDynamicProps = true;
+            } else if (name === 'arrayOps') {
+                filterArrayOps = true;
+            } else if (name === 'nestedAccess') {
+                filterNestedAccess = true;
+            } else if (name === 'queryParsing') {
+                filterQueryParsing = true;
+            } else if (name === 'parseInt') {
+                filterParseInt = true;
+            } else if (name === 'mathOps') {
+                filterMathOps = true;
             }
             if (idx === -1) {
                 done = true;
@@ -80,6 +101,27 @@ if (!hasFilter || filterHttpHandler) {
 }
 if (!hasFilter || filterHttpHandlerHeavy) {
     results.httpHandlerHeavy = runBench('httpHandlerHeavy', runHttpHandlerHeavy, HTTP_HANDLER_HEAVY_ITERATIONS);
+}
+if (!hasFilter || filterStringBuild) {
+    results.stringBuild = runBench('stringBuild', runStringBuild, STRING_BUILD_ITERATIONS);
+}
+if (!hasFilter || filterDynamicProps) {
+    results.dynamicProps = runBench('dynamicProps', runDynamicProps, DYNAMIC_PROPS_ITERATIONS);
+}
+if (!hasFilter || filterArrayOps) {
+    results.arrayOps = runBench('arrayOps', runArrayOps, ARRAY_OPS_ITERATIONS);
+}
+if (!hasFilter || filterNestedAccess) {
+    results.nestedAccess = runBench('nestedAccess', runNestedAccess, NESTED_ACCESS_ITERATIONS);
+}
+if (!hasFilter || filterQueryParsing) {
+    results.queryParsing = runBench('queryParsing', runQueryParsing, QUERY_PARSING_ITERATIONS);
+}
+if (!hasFilter || filterParseInt) {
+    results.parseInt = runBench('parseInt', runParseInt, PARSE_INT_ITERATIONS);
+}
+if (!hasFilter || filterMathOps) {
+    results.mathOps = runBench('mathOps', runMathOps, MATH_OPS_ITERATIONS);
 }
 
 console.log(JSON.stringify(results, null, 2));
