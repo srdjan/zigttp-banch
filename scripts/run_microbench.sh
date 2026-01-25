@@ -133,10 +133,10 @@ run_zigttp_microbench() {
 
     set +e
     local output
-    # Set lower JIT threshold so benchmark functions get compiled
-    # Default is 100. Warmup (20) + measured (30) = 50 calls.
-    # Set to 25 to ensure JIT compilation happens during warmup.
-    output=$(ZTS_JIT_THRESHOLD=25 "$zigttp_bin" --script "$SUITE_PATH" 2>/dev/null)
+    # Set lower JIT threshold and feedback warmup so benchmark functions get compiled
+    # Default threshold is 100, warmup is 50. Benchmark has ~50 outer calls.
+    # Set threshold=10, warmup=5 to ensure JIT compilation + inlining happens during warmup.
+    output=$(ZTS_JIT_THRESHOLD=10 ZTS_JIT_FEEDBACK_WARMUP=5 "$zigttp_bin" --script "$SUITE_PATH" 2>/dev/null)
     local status=$?
     set -e
 
