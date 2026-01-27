@@ -28,24 +28,14 @@ function max(a, b) {
     return a > b ? a : b;
 }
 
-// Parse integer from string with default value
-// Uses global parseInt which is available in zigttp
-function parseIntSafe(str, defaultVal) {
-    if (str === null || str === undefined) return defaultVal;
-    const n = parseInt(str, 10);
-    // Check for NaN using self-inequality (NaN !== NaN)
-    if (n !== n) return defaultVal;
-    return n | 0;
-}
-
 // Realistic processing: query parsing, pagination, data transformation
-// Uses native request.query object for O(1) parameter access
+// Query parameters are pre-parsed to integers by the native Zig layer
 // Note: All numeric operations must be coerced with | 0 for zigttp compatibility
 function processRequest(query) {
-    // Parse pagination params with defaults using native query object
-    const totalItems = parseIntSafe(query.items, 100);
-    const page = parseIntSafe(query.page, 1);
-    const limit = parseIntSafe(query.limit, 10);
+    // Query params are already integers from native parsing, just provide defaults
+    const totalItems = (query.items || 100) | 0;
+    const page = (query.page || 1) | 0;
+    const limit = (query.limit || 10) | 0;
 
     // Pagination math (coerce all results)
     const totalPages = ceil(totalItems / limit) | 0;
