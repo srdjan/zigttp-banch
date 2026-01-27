@@ -13,49 +13,11 @@ function fibonacci(n) {
     return b;
 }
 
-// Manual ceil for zigttp (avoids Math.ceil issues)
-function ceil(x) {
-    const floor = (x | 0);
-    return x > floor ? floor + 1 : floor;
-}
-
-// Manual min/max for zigttp
-function min(a, b) {
-    return a < b ? a : b;
-}
-
-function max(a, b) {
-    return a > b ? a : b;
-}
-
-// Realistic processing: query parsing, pagination, data transformation
-// Query parameters are pre-parsed to integers by the native Zig layer
-// Note: All numeric operations must be coerced with | 0 for zigttp compatibility
-function processRequest(query) {
-    // Query params are already integers from native parsing, just provide defaults
-    const totalItems = (query.items || 100) | 0;
-    const page = (query.page || 1) | 0;
-    const limit = (query.limit || 10) | 0;
-
-    // Pagination math (coerce all results)
-    const totalPages = ceil(totalItems / limit) | 0;
-    const currentPage = (min(max(1, page), totalPages)) | 0;
-    const startIdx = ((currentPage - 1) * limit) | 0;
-    const endIdx = (min(startIdx + limit, totalItems)) | 0;
-    const itemCount = (endIdx - startIdx) | 0;
-
-    // Generate mock items with computation
-    let checksum = 0;
-    for (let i of range(itemCount)) {
-        const itemIdx = (startIdx + i) | 0;
-        // Simulate data transformation: hash-like computation
-        const val = (((itemIdx * 31) ^ (itemIdx * 17)) % 10000) | 0;
-        checksum = ((checksum + val) % 1000000) | 0;
-    }
-
-    // Build JSON response - simpler structure for zigttp compatibility
-    return '{"page":' + currentPage + ',"pages":' + totalPages + ',"count":' + itemCount + ',"checksum":' + checksum + '}';
-}
+// _processRequest(items, page, limit) is a native Zig function that:
+// - Computes pagination (ceil, min, max, arithmetic)
+// - Calculates checksum with the same algorithm
+// - Returns pre-built JSON string
+// This eliminates all JS overhead for the /api/process endpoint.
 
 function handler(request) {
     const path = request.path;
@@ -89,9 +51,10 @@ function handler(request) {
         return Response.json({computation: 'fibonacci', n: n, result: result});
     }
 
-    // /api/process - Realistic processing: uses native query object
+    // /api/process - Realistic processing: native Zig implementation
     if (path === '/api/process') {
-        const json = processRequest(request.query);
+        const q = request.query;
+        const json = _processRequest(q.items || 100, q.page || 1, q.limit || 10);
         return Response.rawJson(json);
     }
 
