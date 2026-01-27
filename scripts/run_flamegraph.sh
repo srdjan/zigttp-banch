@@ -236,13 +236,13 @@ if [[ -n "$BENCH_OUTPUT" && -s "$BENCH_OUTPUT" ]]; then
 EOF
     echo ""
     echo "=== zigttp microbench ==="
-    cat "$BENCH_OUTPUT" | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-for name, result in data.items():
-    ops = result.get('ops_per_sec', 0)
-    print(f\"  {name}: {ops:,.2f} ops/sec\")
-"
+    if command -v jq &> /dev/null; then
+        cat "$BENCH_OUTPUT" | jq -r 'to_entries[] | "  \(.key): \(.value.ops_per_sec // 0 | floor) ops/sec"'
+    else
+        # Fallback: simple grep-based parsing
+        cat "$BENCH_OUTPUT" | grep -oE '"[^"]+"\s*:\s*\{[^}]*"ops_per_sec"\s*:\s*[0-9.]+' | \
+            sed 's/.*"\([^"]*\)".*"ops_per_sec"\s*:\s*\([0-9.]*\).*/  \1: \2 ops\/sec/'
+    fi
 fi
 
 echo ""

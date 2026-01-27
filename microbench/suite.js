@@ -4,68 +4,19 @@ const runtime = typeof detectRuntime === 'function' ? detectRuntime() : 'unknown
 const rawFilter = typeof __benchFilter !== 'undefined' ? ('' + __benchFilter) : '';
 const hasFilter = rawFilter !== '';
 
-let filterArithmetic = false;
-let filterStringOps = false;
-let filterObjectCreate = false;
-let filterPropertyAccess = false;
-let filterFunctionCalls = false;
-let filterJsonOps = false;
-let filterHttpHandler = false;
-let filterHttpHandlerHeavy = false;
-let filterStringBuild = false;
-let filterDynamicProps = false;
-let filterArrayOps = false;
-let filterNestedAccess = false;
-let filterQueryParsing = false;
-let filterParseInt = false;
-let filterMathOps = false;
-
-if (hasFilter) {
-    let start = 0;
-    let done = false;
-    for (let _ of range(rawFilter.length + 1)) {
-        if (!done) {
-            const idx = rawFilter.indexOf(',', start);
-            const name = idx === -1 ? rawFilter.slice(start) : rawFilter.slice(start, idx);
-            if (name === 'arithmetic') {
-                filterArithmetic = true;
-            } else if (name === 'stringOps') {
-                filterStringOps = true;
-            } else if (name === 'objectCreate') {
-                filterObjectCreate = true;
-            } else if (name === 'propertyAccess') {
-                filterPropertyAccess = true;
-            } else if (name === 'functionCalls') {
-                filterFunctionCalls = true;
-            } else if (name === 'jsonOps') {
-                filterJsonOps = true;
-            } else if (name === 'httpHandler') {
-                filterHttpHandler = true;
-            } else if (name === 'httpHandlerHeavy') {
-                filterHttpHandlerHeavy = true;
-            } else if (name === 'stringBuild') {
-                filterStringBuild = true;
-            } else if (name === 'dynamicProps') {
-                filterDynamicProps = true;
-            } else if (name === 'arrayOps') {
-                filterArrayOps = true;
-            } else if (name === 'nestedAccess') {
-                filterNestedAccess = true;
-            } else if (name === 'queryParsing') {
-                filterQueryParsing = true;
-            } else if (name === 'parseInt') {
-                filterParseInt = true;
-            } else if (name === 'mathOps') {
-                filterMathOps = true;
-            }
-            if (idx === -1) {
-                done = true;
-            } else {
-                start = idx + 1;
-            }
-        }
-    }
-}
+// Simple filter check using indexOf (zigttp-compatible, no Set/includes)
+const shouldRun = (name) => {
+    if (!hasFilter) return true;
+    // Check if name appears in comma-separated filter list
+    // Handle: exact match, start of string, end of string, middle
+    const needle = name;
+    const haystack = rawFilter;
+    if (haystack === needle) return true;
+    if (haystack.indexOf(needle + ',') === 0) return true;
+    if (haystack.indexOf(',' + needle) === haystack.length - needle.length - 1) return true;
+    if (haystack.indexOf(',' + needle + ',') !== -1) return true;
+    return false;
+};
 
 const results = {};
 
@@ -78,49 +29,49 @@ function runBench(name, fn, iterations) {
     return result;
 }
 
-if (!hasFilter || filterArithmetic) {
+if (shouldRun('arithmetic')) {
     results.arithmetic = runBench('arithmetic', runArithmetic, ARITHMETIC_ITERATIONS);
 }
-if (!hasFilter || filterStringOps) {
+if (shouldRun('stringOps')) {
     results.stringOps = runBench('stringOps', runStringOps, STRING_OPS_ITERATIONS);
 }
-if (!hasFilter || filterObjectCreate) {
+if (shouldRun('objectCreate')) {
     results.objectCreate = runBench('objectCreate', runObjectCreate, OBJECT_CREATE_ITERATIONS);
 }
-if (!hasFilter || filterPropertyAccess) {
+if (shouldRun('propertyAccess')) {
     results.propertyAccess = runBench('propertyAccess', runPropertyAccess, PROPERTY_ACCESS_ITERATIONS);
 }
-if (!hasFilter || filterFunctionCalls) {
+if (shouldRun('functionCalls')) {
     results.functionCalls = runBench('functionCalls', runFunctionCalls, FUNCTION_CALLS_ITERATIONS);
 }
-if (!hasFilter || filterJsonOps) {
+if (shouldRun('jsonOps')) {
     results.jsonOps = runBench('jsonOps', runJsonOps, JSON_OPS_ITERATIONS);
 }
-if (!hasFilter || filterHttpHandler) {
+if (shouldRun('httpHandler')) {
     results.httpHandler = runBench('httpHandler', runHttpHandler, HTTP_HANDLER_ITERATIONS);
 }
-if (!hasFilter || filterHttpHandlerHeavy) {
+if (shouldRun('httpHandlerHeavy')) {
     results.httpHandlerHeavy = runBench('httpHandlerHeavy', runHttpHandlerHeavy, HTTP_HANDLER_HEAVY_ITERATIONS);
 }
-if (!hasFilter || filterStringBuild) {
+if (shouldRun('stringBuild')) {
     results.stringBuild = runBench('stringBuild', runStringBuild, STRING_BUILD_ITERATIONS);
 }
-if (!hasFilter || filterDynamicProps) {
+if (shouldRun('dynamicProps')) {
     results.dynamicProps = runBench('dynamicProps', runDynamicProps, DYNAMIC_PROPS_ITERATIONS);
 }
-if (!hasFilter || filterArrayOps) {
+if (shouldRun('arrayOps')) {
     results.arrayOps = runBench('arrayOps', runArrayOps, ARRAY_OPS_ITERATIONS);
 }
-if (!hasFilter || filterNestedAccess) {
+if (shouldRun('nestedAccess')) {
     results.nestedAccess = runBench('nestedAccess', runNestedAccess, NESTED_ACCESS_ITERATIONS);
 }
-if (!hasFilter || filterQueryParsing) {
+if (shouldRun('queryParsing')) {
     results.queryParsing = runBench('queryParsing', runQueryParsing, QUERY_PARSING_ITERATIONS);
 }
-if (!hasFilter || filterParseInt) {
+if (shouldRun('parseInt')) {
     results.parseInt = runBench('parseInt', runParseInt, PARSE_INT_ITERATIONS);
 }
-if (!hasFilter || filterMathOps) {
+if (shouldRun('mathOps')) {
     results.mathOps = runBench('mathOps', runMathOps, MATH_OPS_ITERATIONS);
 }
 

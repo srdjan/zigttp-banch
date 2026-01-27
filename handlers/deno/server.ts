@@ -13,6 +13,37 @@ function fibonacci(n: number): number {
     return n <= 1 ? n : b;
 }
 
+// Realistic processing: query parsing, pagination, data transformation
+function processRequest(url: URL): object {
+    const totalItems = parseInt(url.searchParams.get("items") || "100", 10);
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const limit = parseInt(url.searchParams.get("limit") || "10", 10);
+
+    // Pagination math
+    const totalPages = Math.ceil(totalItems / limit);
+    const currentPage = Math.min(Math.max(1, page), totalPages);
+    const startIdx = (currentPage - 1) * limit;
+    const endIdx = Math.min(startIdx + limit, totalItems);
+    const itemCount = endIdx - startIdx;
+
+    // Generate mock items with computation
+    let checksum = 0;
+    for (let i = 0; i < itemCount; i++) {
+        const itemIdx = startIdx + i;
+        // Simulate data transformation: hash-like computation
+        const val = ((itemIdx * 31) ^ (itemIdx * 17)) % 10000;
+        checksum = (checksum + val) % 1000000;
+    }
+
+    // Simplified response structure for zigttp compatibility
+    return {
+        page: currentPage,
+        pages: totalPages,
+        count: itemCount,
+        checksum: checksum,
+    };
+}
+
 Deno.serve({ port: PORT, hostname: "127.0.0.1" }, async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
     const pathname = url.pathname;
@@ -74,6 +105,12 @@ Deno.serve({ port: PORT, hostname: "127.0.0.1" }, async (req: Request): Promise<
             n: n,
             result: result
         });
+    }
+
+    // /api/process - Realistic processing: query parsing, pagination, data transform
+    if (pathname === "/api/process") {
+        const result = processRequest(url);
+        return Response.json(result);
     }
 
     // 404 for everything else

@@ -204,32 +204,74 @@ function benchmark(name, fn, innerIterations, options) {
                 : MEASURED_ITERATIONS)
             : opts.measuredIterations;
 
+    // zigttp-specific path: simplified calibration to avoid heavy loops
+    // Note: zigttp does not support 'break' statements, so we use done flags
     if (isZigttpRuntime) {
+        // Phase 1: Initial warmup to trigger JIT compilation
+        // Run enough iterations at increasing batch sizes to warm up the JIT
         for (let _ of range(warmupIterations)) {
             runBatch(fn, 1);
         }
+        // Additional warmup at larger batch to ensure JIT optimizes the hot path
+        for (let _ of range(10)) {
+            runBatch(fn, 10);
+        }
 
-        const measuredIterationsFinal = measuredIterations;
+        // Phase 2: Calibrate batch size AFTER JIT warmup
+        // The target is to get samples that take at least targetMs
+        const targetMs = 5;
+        const minSampleMs = 1;  // Minimum acceptable sample time for accuracy
+        let batchSize = 10;
+        let elapsed = 0;
+        let calibrationDone = false;
+
+        for (let _ of range(20)) {
+            if (!calibrationDone) {
+                const start = now();
+                runBatch(fn, batchSize);
+                elapsed = now() - start;
+                if (elapsed >= targetMs) {
+                    calibrationDone = true;
+                } else {
+                    // Double batch size, but cap at reasonable limit
+                    batchSize = batchSize * 2;
+                    if (batchSize > 50000) {
+                        batchSize = 50000;
+                        calibrationDone = true;
+                    }
+                }
+            }
+        }
+
+        // Phase 3: Post-calibration warmup at the calibrated batch size
+        // This ensures the JIT is fully warmed up for the actual batch size
+        for (let _ of range(5)) {
+            runBatch(fn, batchSize);
+        }
+
+        // Phase 4: Measured phase with calibrated batch size
         let totalMs = 0;
         let minMs = 0;
         let maxMs = 0;
         let count = 0;
-        for (let _ of range(measuredIterationsFinal)) {
+        for (let _ of range(measuredIterations)) {
             const start = now();
-            runBatch(fn, 1);
-            const elapsed = now() - start;
-            totalMs = totalMs + elapsed;
-            if (count === 0 || elapsed < minMs) {
-                minMs = elapsed;
+            runBatch(fn, batchSize);
+            const sampleElapsed = now() - start;
+            totalMs = totalMs + sampleElapsed;
+            if (count === 0 || sampleElapsed < minMs) {
+                minMs = sampleElapsed;
             }
-            if (count === 0 || elapsed > maxMs) {
-                maxMs = elapsed;
+            if (count === 0 || sampleElapsed > maxMs) {
+                maxMs = sampleElapsed;
             }
             count = count + 1;
         }
 
+        // If samples are too fast (< minSampleMs), timing is unreliable
+        // Report what we have but flag it
         const meanMs = count > 0 ? totalMs / count : 0;
-        const totalOps = iterations * measuredIterationsFinal;
+        const totalOps = iterations * batchSize * measuredIterations;
         const nsPerOp = totalOps > 0 ? (totalMs * 1000000) / totalOps : 0;
         const opsPerSec = totalMs > 0 ? totalOps / (totalMs / 1000) : 0;
 
@@ -237,9 +279,9 @@ function benchmark(name, fn, innerIterations, options) {
             name: name,
             warmup_iterations: warmupIterations,
             warmup_ms: 0,
-            measured_iterations: measuredIterationsFinal,
+            measured_iterations: measuredIterations,
             inner_iterations: iterations,
-            batch_size: 1,
+            batch_size: batchSize,
             total_ms: totalMs,
             mean_ms: meanMs,
             median_ms: meanMs,
@@ -250,10 +292,11 @@ function benchmark(name, fn, innerIterations, options) {
             ops_per_sec: opsPerSec,
             clock_source: clock.source,
             clock_resolution_ms: 0,
-            target_sample_ms: 0
+            target_sample_ms: targetMs
         };
     }
 
+    // Deno/standard path: full calibration with resolution estimation
     const resolutionMs = estimateResolutionMs(now);
     const targetSampleMs = Math.min(
         MAX_TARGET_SAMPLE_MS,
@@ -315,54 +358,28 @@ function benchmark(name, fn, innerIterations, options) {
         }
     }
 
-    // Measured phase
-    let totalMs = 0;
-    let minMs = 0;
-    let maxMs = 0;
-    let meanMs = 0;
-    let medianMs = 0;
-    let p95Ms = 0;
-
-    if (isZigttpRuntime) {
-        let count = 0;
-        for (let _ of range(measuredIterationsFinal)) {
-            const start = now();
-            runBatch(fn, batchSize);
-            const elapsed = now() - start;
-            totalMs = totalMs + elapsed;
-            if (count === 0 || elapsed < minMs) {
-                minMs = elapsed;
-            }
-            if (count === 0 || elapsed > maxMs) {
-                maxMs = elapsed;
-            }
-            count = count + 1;
-        }
-        meanMs = count > 0 ? totalMs / count : 0;
-        medianMs = meanMs;
-        p95Ms = maxMs;
-    } else {
-        const results = [];
-        let resultsCount = 0;
-        for (let _ of range(measuredIterationsFinal)) {
-            const start = now();
-            runBatch(fn, batchSize);
-            const elapsed = now() - start;
-            results[resultsCount] = elapsed;
-            resultsCount = resultsCount + 1;
-        }
-
-        // Calculate statistics
-        for (let i of range(resultsCount)) {
-            totalMs = totalMs + results[i];
-        }
-        meanMs = resultsCount > 0 ? totalMs / resultsCount : 0;
-        const sorted = sortAscending(results, resultsCount);
-        medianMs = percentileFromSorted(sorted, resultsCount, 0.5);
-        p95Ms = percentileFromSorted(sorted, resultsCount, 0.95);
-        minMs = resultsCount > 0 ? sorted[0] : 0;
-        maxMs = resultsCount > 0 ? sorted[resultsCount - 1] : 0;
+    // Measured phase (Deno path only - zigttp returns early above)
+    const results = [];
+    let resultsCount = 0;
+    for (let _ of range(measuredIterationsFinal)) {
+        const start = now();
+        runBatch(fn, batchSize);
+        const elapsed = now() - start;
+        results[resultsCount] = elapsed;
+        resultsCount = resultsCount + 1;
     }
+
+    // Calculate statistics
+    let totalMs = 0;
+    for (let i of range(resultsCount)) {
+        totalMs = totalMs + results[i];
+    }
+    const meanMs = resultsCount > 0 ? totalMs / resultsCount : 0;
+    const sorted = sortAscending(results, resultsCount);
+    const medianMs = percentileFromSorted(sorted, resultsCount, 0.5);
+    const p95Ms = percentileFromSorted(sorted, resultsCount, 0.95);
+    const minMs = resultsCount > 0 ? sorted[0] : 0;
+    const maxMs = resultsCount > 0 ? sorted[resultsCount - 1] : 0;
 
     const totalOps = iterations * batchSize * measuredIterationsFinal;
     const nsPerOp = totalOps > 0 ? (totalMs * 1000000) / totalOps : 0;

@@ -12,42 +12,52 @@ zigttp is built from sibling directory `../zigttp` and produces minimal-API sync
 
 ```bash
 # Quick validation (1 connection, short duration)
-./scripts/run.sh quick
+deno run -A bench.ts quick [runtime]
 
 # Full benchmark suite (HTTP + microbench + coldstart + memory)
-./scripts/run.sh full
+deno run -A bench.ts full [runtime]
 
 # Individual benchmark types
-./scripts/run.sh http [runtime]        # HTTP throughput
-./scripts/run.sh microbench [runtime]  # JS execution speed
-./scripts/run.sh coldstart [runtime]   # Cold start times
-./scripts/run.sh memory [runtime]      # Memory profiling
+deno run -A bench.ts http [runtime]       # HTTP throughput
+deno run -A bench.ts micro [runtime]      # JS execution speed
+deno run -A bench.ts cold [runtime]       # Cold start times
+deno run -A bench.ts memory [runtime]     # Memory profiling
 
-# Combined ops/sec table output
-./scripts/run_microbench_table.sh all
+# With options
+deno run -A bench.ts http zigttp --connections=20
+deno run -A bench.ts micro zigttp --filter=arithmetic,stringOps
+deno run -A bench.ts cold zigttp --iterations=50
+
+# Report generation
+deno run -A bench.ts report results/<timestamp>
+deno run -A bench.ts compare results/<timestamp>
 
 # Flamegraph for zigttp
 ./scripts/run_flamegraph.sh
-
-# Generate analysis report from results
-python3 analysis/analyze.py --results-dir results/<timestamp> --output report.md
 ```
 
-Runtime argument is optional: `deno` or `zigttp`.
+Runtime argument is optional: `deno`, `zigttp`, or `all` (default).
 
-### Environment Variables for Tuning
+### CLI Options
 
-```bash
-BENCH_FILTER=httpHandlerHeavy                  # Run only specific benchmarks (comma-separated)
-BENCH_WARMUP_ITERATIONS=5                      # Reduce warmup for smoke tests
-BENCH_MEASURED_ITERATIONS=8                    # Fewer measured samples
-BENCH_HTTP_HANDLER_HEAVY_ITERATIONS=200        # Tune inner loop iterations
-PROFILE_SECONDS=20                             # Flamegraph sampling window
-```
+- `--connections=N`: Number of connections for HTTP benchmarks (default: 10)
+- `--filter=name1,name2`: Filter microbenchmarks by name
+- `--iterations=N`: Number of iterations for cold start (default: 100)
 
 ## Architecture
 
-**scripts/**: Bash orchestration layer. `run.sh` is main entry point that dispatches to `run_http.sh`, `run_microbench.sh`, `run_coldstart.sh`, `run_memory.sh`.
+**bench.ts**: Main CLI entry point that dispatches to benchmark modules.
+
+**lib/**: Deno TypeScript modules for benchmark orchestration:
+- `runtime.ts`: Runtime detection and binary paths
+- `ports.ts`: Port management utilities
+- `server.ts`: Server lifecycle management
+- `results.ts`: Results directory and system info
+- `http.ts`: HTTP benchmark runner
+- `coldstart.ts`: Cold start benchmarks
+- `memory.ts`: Memory profiling
+- `microbench.ts`: Microbenchmark runner
+- `analyze.ts`: Report generation
 
 **handlers/**: HTTP server implementations per runtime. Each implements identical endpoints (`/api/health`, `/api/echo`, `/api/greet/:name`). zigttp handler at `handlers/zigttp/handler.js` is synchronous-only with minimal API surface.
 
@@ -55,11 +65,54 @@ PROFILE_SECONDS=20                             # Flamegraph sampling window
 
 **results/**: Output directory (gitignored). Each run creates `YYYYMMDD_HHMMSS_PID_RAND/` subdirectory containing JSON results and generated `report.md`.
 
+**baselines/deno/**: Saved Deno benchmark results for comparison (quick and full runs).
+
 ## Key Constraints
 
 zigttp handlers are synchronous-only: no Promises, no async/await, no module imports. Test both warm (server persists) and cold (fresh spawn) modes separately.
 
 Results directories preserve historical runs and never overwrite. When comparing runs, ensure `system_info.json` matches.
+
+## zigttp Language Limitations
+
+The benchmark code must be compatible with zigttp's restricted JavaScript subset:
+
+- **No `break` or `continue` statements**: Use a `done` flag pattern instead:
+  ```javascript
+  let done = false;
+  for (let _ of range(10)) {
+      if (!done) {
+          // ... work ...
+          if (condition) {
+              done = true;
+          }
+      }
+  }
+  ```
+- **No `while` loops**: Use `for (let _ of range(n))` with a done flag
+- **No C-style `for` loops**: Use `for (let i of range(n))` instead
+- **No `var` keyword**: Use `let` or `const`
+- **No function expressions**: Use arrow functions `() => {}` or function declarations
+- **No `Function()` constructor**: The `range()` builtin is provided globally
+- **Array index assignment only works for index 0**: Use accumulation instead of array storage
+- **No `Array.push()`**: Build arrays differently or use accumulation
+
+## Known zigttp Runtime Issues
+
+**Function execution caching bug**: After exactly 3 executions of the same function with 50000+ inner loop iterations, zigttp starts returning incorrect results (returns the seed parameter instead of computed value) and timing drops to near-zero. This affects microbenchmark accuracy. The issue persists regardless of JIT settings and appears to be an interpreter-level caching/optimization bug in the zigttp runtime.
+
+**JIT disabled for microbenchmarks**: Due to the caching bug above, microbenchmarks run with `ZTS_JIT_THRESHOLD=999999` to effectively disable JIT.
+
+## Baseline Comparison Workflow
+
+**Deno baselines are saved in `baselines/deno/`** (quick and full runs from 2026-01-26).
+
+When running benchmarks:
+1. Only run zigttp benchmarks: `deno run -A bench.ts full zigttp` or `deno run -A bench.ts quick zigttp`
+2. Compare results against saved Deno baseline using `deno run -A bench.ts compare results/<dir>`
+3. Do NOT re-run Deno benchmarks unless explicitly requested
+
+This avoids redundant Deno runs and ensures consistent baseline comparison.
 
 ## Prerequisites
 

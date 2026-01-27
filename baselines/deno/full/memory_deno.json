@@ -2,10 +2,11 @@
     "type": "memory_profile",
     "runtime": "deno",
     "metrics": {
-        "baseline_kb": ,
-        "peak_kb": ,
+        "baseline_kb": 0,
+        "peak_kb": 0,
         "avg_kb": 0,
         "samples": 300
     },
-    "timestamp": "2026-01-26T12:32:19Z"
+    "timestamp": "2026-01-26T12:32:19Z",
+    "note": "Memory profiling was broken in original baseline"
 }
