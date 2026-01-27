@@ -1,0 +1,11 @@
+{
+    "type": "memory_profile",
+    "runtime": "deno",
+    "metrics": {
+        "baseline_kb": ,
+        "peak_kb": ,
+        "avg_kb": 0,
+        "samples": 300
+    },
+    "timestamp": "2026-01-26T12:32:19Z"
+}
