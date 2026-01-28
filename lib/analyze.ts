@@ -315,7 +315,11 @@ export async function generateReportFile(
   const results = parseResults(rawResults);
 
   // Try to load baseline for comparison
-  const mode = resultsDir.includes("quick") ? "quick" : "full";
+  let mode: "quick" | "full" = resultsDir.includes("quick") ? "quick" : "full";
+  const meta = rawResults["run_meta.json"] as { mode?: string } | undefined;
+  if (meta?.mode === "quick" || meta?.mode === "full") {
+    mode = meta.mode;
+  }
   const rawBaseline = await loadBaseline(mode);
   const baseline = rawBaseline ? parseResults(rawBaseline) : undefined;
 

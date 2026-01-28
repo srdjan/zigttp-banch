@@ -5,7 +5,7 @@
 
 import { join } from "https://deno.land/std@0.220.0/path/mod.ts";
 import { type Runtime, ZIGTTP_SERVER_BIN, projectDir } from "./runtime.ts";
-import { ensurePortFree, getDefaultPort, isPortFree } from "./ports.ts";
+import { ensurePortFree, getDefaultPort, isPortFree, waitForServer } from "./ports.ts";
 import { saveResult } from "./results.ts";
 
 export type ColdStartConfig = {
@@ -33,23 +33,6 @@ export type ColdStartResult = {
 const DEFAULT_CONFIG: ColdStartConfig = {
   iterations: 100,
 };
-
-/**
- * Wait for port to accept connections (polling)
- */
-async function waitForPort(port: number, timeoutMs: number = 10000): Promise<boolean> {
-  const startTime = performance.now();
-  const pollIntervalMs = 10;
-
-  while (performance.now() - startTime < timeoutMs) {
-    if (!(await isPortFree(port))) {
-      return true;
-    }
-    await new Promise((r) => setTimeout(r, pollIntervalMs));
-  }
-
-  return false;
-}
 
 /**
  * Measure a single cold start iteration
@@ -81,8 +64,8 @@ async function measureColdStart(
 
   const process = cmd.spawn();
 
-  // Wait for port to be listening
-  const ready = await waitForPort(port, 10000);
+  // Wait for first successful response
+  const ready = await waitForServer(port, "/api/health", 10000);
   const endUs = performance.now() * 1000;
 
   // Kill the process

@@ -1,7 +1,7 @@
 // Integer arithmetic benchmark
 // Tests basic math operations performance
 
-const ARITHMETIC_ITERATIONS = 50000;
+const ARITHMETIC_ITERATIONS = 20000;
 
 function runArithmetic(seed = 0) {
     let sum = seed | 0;

@@ -1,7 +1,7 @@
 // String operations benchmark
 // Tests indexOf and length operations
 
-const STRING_OPS_ITERATIONS = 50000;
+const STRING_OPS_ITERATIONS = 20000;
 
 function runStringOps(seed = 0) {
     const str = 'The quick brown fox jumps over the lazy dog';

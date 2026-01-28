@@ -68,7 +68,7 @@ async function buildSuiteScript(config: MicrobenchConfig): Promise<string> {
   let script = "";
 
   if (config.filter) {
-    script += `let __benchFilter = "${config.filter}";\n`;
+    script += `let __benchFilter = ${JSON.stringify(config.filter)};\n`;
   }
 
   if (config.httpHandlerHeavyIterations !== undefined) {

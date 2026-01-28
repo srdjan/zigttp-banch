@@ -2,18 +2,11 @@
 // Works in Deno and zigttp
 
 if (typeof range === 'undefined') {
-    const rangeFactory = Function(
-        'n',
-        'var size = n | 0;' +
-            'if (size <= 0) { return []; }' +
-            'var arr = new Array(size);' +
-            'for (var i = 0; i < size; i++) { arr[i] = i; }' +
-            'return arr;'
-    );
-
     function range(n) {
         if (typeof n !== 'number' || n <= 0) return [];
-        return rangeFactory(n);
+        const size = n | 0;
+        if (size <= 0) return [];
+        return Array.from({ length: size }, (_, i) => i);
     }
     if (typeof globalThis !== 'undefined') {
         globalThis.range = range;

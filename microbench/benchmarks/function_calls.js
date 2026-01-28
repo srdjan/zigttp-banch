@@ -1,7 +1,7 @@
 // Function call overhead benchmark
 // Tests nested function call performance
 
-const FUNCTION_CALLS_ITERATIONS = 50000;
+const FUNCTION_CALLS_ITERATIONS = 20000;
 
 function add(a, b) {
     return (a + b) % 1000000;

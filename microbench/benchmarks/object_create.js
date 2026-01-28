@@ -1,7 +1,7 @@
 // Object creation benchmark
 // Tests object allocation patterns
 
-const OBJECT_CREATE_ITERATIONS = 50000;
+const OBJECT_CREATE_ITERATIONS = 20000;
 
 function runObjectCreate(seed) {
     if (seed === undefined) seed = 0;

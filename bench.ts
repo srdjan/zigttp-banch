@@ -15,8 +15,8 @@
  *   deno run -A bench.ts report <dir>       # Generate report
  */
 
-import { parseRuntimeArg, getRuntimesToRun, detectRuntimes, type Runtime } from "./lib/runtime.ts";
-import { createResultsDir, saveSystemInfo, loadResults } from "./lib/results.ts";
+import { getRuntimesToRun, detectRuntimes, type Runtime } from "./lib/runtime.ts";
+import { createResultsDir, saveResult, saveSystemInfo, loadResults } from "./lib/results.ts";
 import { runAllHttpBenchmarks, type HttpConfig } from "./lib/http.ts";
 import { runAllColdStartBenchmarks, type ColdStartConfig } from "./lib/coldstart.ts";
 import { runAllMemoryProfiles, type MemoryConfig } from "./lib/memory.ts";
@@ -206,7 +206,16 @@ async function runCompare(options: Options): Promise<void> {
 
   const { getBaselineDir } = await import("./lib/results.ts");
 
-  const mode = options.target.includes("quick") ? "quick" : "full";
+  let mode: "quick" | "full" = options.target.includes("quick") ? "quick" : "full";
+  try {
+    const rawResults = await loadResults(options.target);
+    const meta = rawResults["run_meta.json"] as { mode?: string } | undefined;
+    if (meta?.mode === "quick" || meta?.mode === "full") {
+      mode = meta.mode;
+    }
+  } catch {
+    // Fall back to name-based detection
+  }
   const baselineDir = getBaselineDir(mode);
 
   console.log(`Comparing ${options.target} against ${baselineDir}`);
@@ -268,6 +277,12 @@ async function main(): Promise<void> {
   const resultsDir = await createResultsDir();
   console.log(`Results directory: ${resultsDir}`);
   console.log("");
+
+  const mode: "quick" | "full" = options.command === "quick" ? "quick" : "full";
+  await saveResult(resultsDir, "run_meta.json", {
+    mode,
+    command: options.command,
+  });
 
   // Save system info
   await saveSystemInfo(resultsDir);

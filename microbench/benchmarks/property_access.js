@@ -1,7 +1,7 @@
 // Property access benchmark
 // Tests object property read/write performance
 
-const PROPERTY_ACCESS_ITERATIONS = 50000;
+const PROPERTY_ACCESS_ITERATIONS = 20000;
 
 function runPropertyAccess(seed = 0) {
     const obj = { a: seed & 0xff, b: 2, c: 3, d: 4, e: 5 };
