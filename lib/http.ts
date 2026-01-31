@@ -7,11 +7,18 @@ import { ensurePortFree, getDefaultPort } from "./ports.ts";
 import { startServer, stopServer, type ServerHandle } from "./server.ts";
 import { saveResult } from "./results.ts";
 
+export type EndpointConfig = {
+  path: string;
+  method?: string;
+  body?: string;
+  headers?: Record<string, string>;
+};
+
 export type HttpConfig = {
   connections: number;
   duration: string;
   warmupRequests: number;
-  endpoints: string[];
+  endpoints: (string | EndpointConfig)[];
   cooldownSecs: number;
 };
 
@@ -35,11 +42,29 @@ export type HttpResult = {
   timestamp: string;
 };
 
+// Generate realistic test data for /api/transform
+function generateTransformPayload(itemCount: number = 100): string {
+  const items = [];
+  for (let i = 0; i < itemCount; i++) {
+    items.push({
+      id: i,
+      value: Math.floor(Math.random() * 100),
+      active: Math.random() > 0.1, // 90% active
+    });
+  }
+  return JSON.stringify({ items });
+}
+
 const DEFAULT_CONFIG: HttpConfig = {
   connections: 10,
   duration: "30s",
   warmupRequests: 1000,
-  endpoints: ["/api/health", "/api/echo", "/api/greet/world", "/api/process?items=500&page=3&limit=25"],
+  endpoints: [
+    "/api/health",
+    "/api/echo",
+    "/api/greet/world",
+    "/api/process?items=500&page=3&limit=25",
+  ],
   cooldownSecs: 2,
 };
 
@@ -82,10 +107,35 @@ function parseHeyOutput(output: string): HttpMetrics {
 async function runHey(
   url: string,
   connections: number,
-  duration: string
+  duration: string,
+  options?: { method?: string; body?: string; headers?: Record<string, string> }
 ): Promise<{ output: string; success: boolean }> {
+  const args = ["-c", String(connections), "-z", duration];
+
+  // Add method if specified
+  if (options?.method && options.method !== "GET") {
+    args.push("-m", options.method);
+  }
+
+  // Add headers
+  if (options?.headers) {
+    for (const [key, value] of Object.entries(options.headers)) {
+      args.push("-H", `${key}: ${value}`);
+    }
+  }
+
+  // Add body if specified (write to temp file for hey)
+  let bodyFile: string | null = null;
+  if (options?.body) {
+    bodyFile = await Deno.makeTempFile({ prefix: "hey_body_" });
+    await Deno.writeTextFile(bodyFile, options.body);
+    args.push("-D", bodyFile);
+  }
+
+  args.push(url);
+
   const cmd = new Deno.Command("hey", {
-    args: ["-c", String(connections), "-z", duration, url],
+    args,
     stdout: "piped",
     stderr: "piped",
   });
@@ -93,6 +143,15 @@ async function runHey(
   const { code, stdout, stderr } = await cmd.output();
   const output = new TextDecoder().decode(stdout);
   const errors = new TextDecoder().decode(stderr);
+
+  // Clean up temp file
+  if (bodyFile) {
+    try {
+      await Deno.remove(bodyFile);
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
 
   if (code !== 0) {
     console.error(`hey failed: ${errors}`);
@@ -105,9 +164,37 @@ async function runHey(
 /**
  * Run warmup requests
  */
-async function warmup(url: string, requests: number): Promise<void> {
+async function warmup(
+  url: string,
+  requests: number,
+  options?: { method?: string; body?: string; headers?: Record<string, string> }
+): Promise<void> {
+  const args = ["-n", String(requests), "-c", "10"];
+
+  // Add method if specified
+  if (options?.method && options.method !== "GET") {
+    args.push("-m", options.method);
+  }
+
+  // Add headers
+  if (options?.headers) {
+    for (const [key, value] of Object.entries(options.headers)) {
+      args.push("-H", `${key}: ${value}`);
+    }
+  }
+
+  // Add body if specified
+  let bodyFile: string | null = null;
+  if (options?.body) {
+    bodyFile = await Deno.makeTempFile({ prefix: "hey_warmup_" });
+    await Deno.writeTextFile(bodyFile, options.body);
+    args.push("-D", bodyFile);
+  }
+
+  args.push(url);
+
   const cmd = new Deno.Command("hey", {
-    args: ["-n", String(requests), "-c", "10", url],
+    args,
     stdout: "null",
     stderr: "null",
   });
@@ -117,6 +204,15 @@ async function warmup(url: string, requests: number): Promise<void> {
     await new Promise((r) => setTimeout(r, 1000));
   } catch {
     // Warmup failure is non-fatal
+  } finally {
+    // Clean up temp file
+    if (bodyFile) {
+      try {
+        await Deno.remove(bodyFile);
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   }
 }
 
@@ -126,18 +222,32 @@ async function warmup(url: string, requests: number): Promise<void> {
 async function benchmarkEndpoint(
   port: number,
   runtime: string,
-  endpoint: string,
+  endpointConfig: string | EndpointConfig,
   config: HttpConfig,
   resultsDir: string
 ): Promise<HttpResult> {
-  const url = `http://127.0.0.1:${port}${endpoint}`;
-  console.log(`  Endpoint: ${endpoint} (${config.connections} connections)`);
+  // Normalize endpoint config
+  const normalized: EndpointConfig = typeof endpointConfig === "string"
+    ? { path: endpointConfig }
+    : endpointConfig;
+
+  const url = `http://127.0.0.1:${port}${normalized.path}`;
+  const method = normalized.method || "GET";
+  const displayEndpoint = `${method} ${normalized.path}`;
+
+  console.log(`  Endpoint: ${displayEndpoint} (${config.connections} connections)`);
+
+  const options = {
+    method: normalized.method,
+    body: normalized.body,
+    headers: normalized.headers,
+  };
 
   // Warmup
-  await warmup(url, config.warmupRequests);
+  await warmup(url, config.warmupRequests, options);
 
   // Measured run
-  const { output, success } = await runHey(url, config.connections, config.duration);
+  const { output, success } = await runHey(url, config.connections, config.duration, options);
 
   const metrics = success ? parseHeyOutput(output) : {
     requests_per_second: 0,
@@ -153,7 +263,7 @@ async function benchmarkEndpoint(
   const result: HttpResult = {
     type: "http_benchmark",
     runtime,
-    endpoint,
+    endpoint: displayEndpoint,
     connections: config.connections,
     duration: config.duration,
     warmup_requests: config.warmupRequests,
@@ -162,7 +272,8 @@ async function benchmarkEndpoint(
   };
 
   // Save result
-  const filename = `http_${runtime}_${endpoint.replace(/\//g, "_")}_${config.connections}c.json`;
+  const safeEndpoint = displayEndpoint.replace(/[\/\s]/g, "_");
+  const filename = `http_${runtime}_${safeEndpoint}_${config.connections}c.json`;
   await saveResult(resultsDir, filename, result);
 
   return result;

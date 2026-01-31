@@ -2,6 +2,16 @@
 
 Comprehensive performance comparison of [zigttp](https://github.com/srdjan/zigttp) against Deno.
 
+## Cold Start Optimization
+
+**New**: zigttp cold starts can be reduced by 16% (83ms → 71ms) using embedded bytecode precompilation:
+
+```bash
+./scripts/build_optimized.sh
+```
+
+See [OPTIMIZATIONS.md](OPTIMIZATIONS.md) for detailed analysis and profiling results.
+
 ## Quick Start
 
 ```bash
@@ -78,16 +88,21 @@ The SVG is saved under `results/<timestamp>/flamegraph.svg`.
 
 Build zigttp:
 ```bash
-cd ../zigttp
-zig build -Doptimize=ReleaseFast
+# Baseline build (runtime handler loading)
+./scripts/build_baseline.sh
+
+# Optimized build (embedded bytecode, 16% faster cold starts)
+./scripts/build_optimized.sh
 ```
-This also produces `zig-out/bin/zigttp-bench` used by the microbenchmark runner.
+
+Both scripts build the server and the `zigttp-bench` binary used by microbenchmarks.
 
 ## Project Structure
 
 ```
 .
 ├── README.md           # This file
+├── OPTIMIZATIONS.md    # Cold start optimization guide
 ├── methodology.md      # Detailed test methodology
 ├── versions.json       # Pinned runtime versions
 ├── features/           # Feature comparison matrix
@@ -96,6 +111,8 @@ This also produces `zig-out/bin/zigttp-bench` used by the microbenchmark runner.
 ├── scripts/            # Benchmark runner scripts
 ├── analysis/           # Statistical analysis tools
 └── results/            # Benchmark output (gitignored)
+    ├── optimization_results.md    # Detailed optimization analysis
+    └── coldstart_analysis.md      # Profiling and hot spot analysis
 ```
 
 ## Benchmark Categories
@@ -119,7 +136,11 @@ Microbenchmarks testing core JS performance:
 
 ### Cold Start
 Time from process spawn to first successful HTTP response.
-100 iterations per runtime for statistical significance.
+- Default: 100 iterations per runtime for statistical significance
+- Baseline zigttp: ~83ms (runtime handler parsing)
+- Optimized zigttp: ~71ms (embedded bytecode, 16% faster)
+- Profiling tools: `./scripts/profile_coldstart.sh`
+- Analysis scripts: `./scripts/analyze_coldstart*.sh`
 
 ### Memory Usage
 - Baseline RSS after startup

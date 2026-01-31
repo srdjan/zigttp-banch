@@ -108,6 +108,44 @@ When running benchmarks:
 
 This avoids redundant Deno runs and ensures consistent baseline comparison.
 
+## Cold Start Optimization
+
+### Optimized Build (Recommended for Production)
+
+Build zigttp with embedded bytecode precompilation for 16% faster cold starts:
+
+```bash
+./scripts/build_optimized.sh
+```
+
+This builds zigttp with `-Dhandler=handlers/zigttp/handler.js`, which:
+- Precompiles handler to bytecode at build time (1,968 bytes → 895 bytes)
+- Eliminates runtime parsing and compilation (saves ~13ms)
+- Reduces cold start from 83ms to 71ms
+- No binary size increase
+- No functionality changes
+
+### Baseline Build (Development/Comparison)
+
+```bash
+./scripts/build_baseline.sh
+```
+
+This builds without embedded bytecode for comparison testing.
+
+### Optimization Results
+
+**Proven effective** (2026-01-31 analysis):
+- Embedded bytecode: **-13ms (16% faster)** - 83ms → 71ms
+- Memory footprint: 4.0 MB → 3.8 MB
+
+**Tested but ineffective**:
+- Reducing prewarm count: 0ms savings (prewarm runs in parallel)
+- Stripping debug symbols: 0ms savings (dyld overhead unaffected)
+- Reducing pool size: <2ms variance across 1-28 workers
+
+See `results/optimization_results.md` for detailed analysis and `results/coldstart_analysis.md` for profiling data.
+
 ## Prerequisites
 
 - `hey` CLI for HTTP load testing

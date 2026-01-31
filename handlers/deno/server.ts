@@ -113,6 +113,53 @@ Deno.serve({ port: PORT, hostname: "127.0.0.1" }, async (req: Request): Promise<
         return Response.json(result);
     }
 
+    // /api/transform - Realistic JSON processing endpoint
+    if (pathname === "/api/transform" && method === "POST") {
+        const body = await req.text();
+        if (!body) {
+            return Response.json({ error: "No body provided" }, { status: 400 });
+        }
+        try {
+            const data = JSON.parse(body);
+            const items = data.items || [];
+
+            // Realistic data processing: compute statistics
+            let total = 0;
+            let count = 0;
+            let highCount = 0;
+            let lowCount = 0;
+
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const value = item.value || 0;
+                const active = item.active !== false;
+
+                if (active && value > 0) {
+                    total = total + value;
+                    count = count + 1;
+
+                    if (value > 50) {
+                        highCount = highCount + 1;
+                    } else {
+                        lowCount = lowCount + 1;
+                    }
+                }
+            }
+
+            return Response.json({
+                stats: {
+                    total: total,
+                    count: count,
+                    average: count > 0 ? total / count : 0,
+                    highCount: highCount,
+                    lowCount: lowCount
+                }
+            });
+        } catch {
+            return Response.json({ error: "Invalid JSON" }, { status: 400 });
+        }
+    }
+
     // 404 for everything else
     return Response.json({ error: "Not Found", url: req.url }, { status: 404 });
 });
