@@ -97,12 +97,6 @@ The benchmark code must be compatible with zigttp's restricted JavaScript subset
 - **Array index assignment only works for index 0**: Use accumulation instead of array storage
 - **No `Array.push()`**: Build arrays differently or use accumulation
 
-## Known zigttp Runtime Issues
-
-**Function execution caching bug**: After exactly 3 executions of the same function with 50000+ inner loop iterations, zigttp starts returning incorrect results (returns the seed parameter instead of computed value) and timing drops to near-zero. This affects microbenchmark accuracy. The issue persists regardless of JIT settings and appears to be an interpreter-level caching/optimization bug in the zigttp runtime.
-
-**JIT disabled for microbenchmarks**: Due to the caching bug above, microbenchmarks run with `ZTS_JIT_THRESHOLD=999999` to effectively disable JIT.
-
 ## Baseline Comparison Workflow
 
 **Deno baselines are saved in `baselines/deno/`** (quick and full runs from 2026-01-26).

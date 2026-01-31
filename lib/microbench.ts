@@ -182,8 +182,6 @@ async function runZigttpMicrobench(
     stderr: "piped",
     env: {
       ...Deno.env.toObject(),
-      // Disable JIT due to known caching bug with high-iteration benchmarks
-      ZTS_JIT_THRESHOLD: "999999",
     },
   });
 
