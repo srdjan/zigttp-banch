@@ -4,17 +4,27 @@ const runtime = typeof detectRuntime === 'function' ? detectRuntime() : 'unknown
 const rawFilter = typeof __benchFilter !== 'undefined' ? ('' + __benchFilter) : '';
 const hasFilter = rawFilter !== '';
 
-// Simple filter check using indexOf (zigttp-compatible, no Set/includes)
+// Filter check using indexOf + substring boundary verification
+// NOTE: zigttp has a bug where string concat inside functions swaps operands
+// when one operand is a function parameter. We avoid concat entirely by using
+// substring() to check comma boundaries around indexOf matches.
 const shouldRun = (name) => {
     if (!hasFilter) return true;
-    // Check if name appears in comma-separated filter list
-    // Handle: exact match, start of string, end of string, middle
-    const needle = name;
-    const haystack = rawFilter;
-    if (haystack === needle) return true;
-    if (haystack.indexOf(needle + ',') === 0) return true;
-    if (haystack.indexOf(',' + needle) === haystack.length - needle.length - 1) return true;
-    if (haystack.indexOf(',' + needle + ',') !== -1) return true;
+    if (rawFilter === name) return true;
+    const idx = rawFilter.indexOf(name);
+    if (idx === -1) return false;
+    const nameLen = name.length;
+    const filterLen = rawFilter.length;
+    let leftOk = (idx === 0);
+    if (!leftOk && idx > 0) {
+        leftOk = (rawFilter.substring(idx - 1, idx) === ',');
+    }
+    const endPos = idx + nameLen;
+    let rightOk = (endPos === filterLen);
+    if (!rightOk && endPos < filterLen) {
+        rightOk = (rawFilter.substring(endPos, endPos + 1) === ',');
+    }
+    if (leftOk && rightOk) return true;
     return false;
 };
 

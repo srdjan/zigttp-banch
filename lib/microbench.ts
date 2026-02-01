@@ -173,12 +173,63 @@ async function runDenoMicrobench(
   }
 }
 
+// All benchmark names in suite order
+const ALL_BENCHMARK_NAMES = [
+  "arithmetic", "stringOps", "objectCreate", "propertyAccess", "functionCalls",
+  "jsonOps", "httpHandler", "httpHandlerHeavy", "stringBuild", "dynamicProps",
+  "arrayOps", "nestedAccess", "queryParsing", "parseInt", "mathOps",
+];
+
+// zigttp segfaults when running 9+ benchmarks in one process (GC/heap pressure).
+// Split into groups of this size to work around the issue.
+const ZIGTTP_GROUP_SIZE = 8;
+
+/**
+ * Run a single zigttp-bench process with a filter
+ */
+async function runZigttpGroup(
+  config: MicrobenchConfig,
+  filter: string,
+  resultsDir: string,
+): Promise<Record<string, BenchmarkData> | null> {
+  const suiteScript = await buildSuiteScript({ ...config, filter }, "zigttp");
+  const suitePath = join(resultsDir, `microbench_suite_${filter.split(",")[0]}.js`);
+  await Deno.writeTextFile(suitePath, suiteScript);
+
+  const cmd = new Deno.Command(ZIGTTP_BENCH_BIN, {
+    args: ["--script", suitePath],
+    stdout: "piped",
+    stderr: "piped",
+  });
+
+  const { code, stdout, stderr } = await cmd.output();
+  const output = new TextDecoder().decode(stdout).trim();
+
+  if (code !== 0 && !output) {
+    const stderrText = new TextDecoder().decode(stderr);
+    console.error(`  Group [${filter}] failed (exit ${code})`);
+    if (stderrText) console.error(`  ${stderrText.slice(0, 200)}`);
+    return null;
+  }
+
+  if (!output) return null;
+
+  try {
+    return JSON.parse(output) as Record<string, BenchmarkData>;
+  } catch {
+    console.error(`  Failed to parse output for group [${filter}]`);
+    return null;
+  }
+}
+
 /**
  * Run microbenchmarks with zigttp
+ * Splits into groups to avoid segfault with 9+ benchmarks in one process.
  */
 async function runZigttpMicrobench(
-  suiteScript: string,
-  resultsDir: string
+  _suiteScript: string,
+  resultsDir: string,
+  config: MicrobenchConfig = {},
 ): Promise<MicrobenchResult | null> {
   console.log("=== Microbenchmarks: zigttp ===");
 
@@ -191,59 +242,57 @@ async function runZigttpMicrobench(
     return null;
   }
 
-  // Write suite to temp file
-  const suitePath = join(resultsDir, "microbench_suite.js");
-  await Deno.writeTextFile(suitePath, suiteScript);
+  // Determine which benchmarks to run
+  const names = config.filter
+    ? ALL_BENCHMARK_NAMES.filter(n => config.filter!.split(",").includes(n))
+    : [...ALL_BENCHMARK_NAMES];
 
-  const cmd = new Deno.Command(ZIGTTP_BENCH_BIN, {
-    args: ["--script", suitePath],
-    stdout: "piped",
-    stderr: "piped",
-    env: {
-      ...Deno.env.toObject(),
-    },
-  });
-
-  const { code, stdout, stderr } = await cmd.output();
-  const output = new TextDecoder().decode(stdout).trim();
-
-  if (code !== 0 && !output) {
-    console.error("  Failed to run zigttp-bench");
-    console.error(new TextDecoder().decode(stderr));
-    console.log("");
-    return null;
+  // Split into groups
+  const groups: string[][] = [];
+  for (let i = 0; i < names.length; i += ZIGTTP_GROUP_SIZE) {
+    groups.push(names.slice(i, i + ZIGTTP_GROUP_SIZE));
   }
 
-  if (!output) {
-    console.error("  No output from zigttp-bench");
-    console.log("");
-    return null;
-  }
+  const allBenchmarks: Record<string, BenchmarkData> = {};
 
-  try {
-    const benchmarks = JSON.parse(output) as Record<string, BenchmarkData>;
-
-    // Print summary
-    for (const [name, data] of Object.entries(benchmarks)) {
-      const opsPerSec = data.ops_per_sec ?? 0;
-      console.log(`  ${name}: ${Math.floor(opsPerSec).toLocaleString()} ops/sec`);
+  for (const group of groups) {
+    const filter = group.join(",");
+    if (groups.length > 1) {
+      console.log(`  Running group: ${filter}`);
     }
+    const groupResults = await runZigttpGroup(config, filter, resultsDir);
+    if (groupResults) {
+      for (const [name, data] of Object.entries(groupResults)) {
+        allBenchmarks[name] = data;
+      }
+    }
+  }
 
-    const result: MicrobenchResult = {
-      type: "microbenchmark",
-      runtime: "zigttp",
-      benchmarks,
-      timestamp: new Date().toISOString(),
-    };
-
-    await saveResult(resultsDir, "microbench_zigttp.json", result);
+  if (Object.keys(allBenchmarks).length === 0) {
+    console.error("  No benchmark results collected");
     console.log("");
-    return result;
-  } catch (e) {
-    console.error("  Failed to parse benchmark output:", e);
-    console.log("  Raw output:", output.slice(0, 500));
     return null;
   }
+
+  // Print summary
+  for (const [name, data] of Object.entries(allBenchmarks)) {
+    const opsPerSec = data.ops_per_sec ?? 0;
+    console.log(`  ${name}: ${Math.floor(opsPerSec).toLocaleString()} ops/sec`);
+  }
+
+  const result: MicrobenchResult = {
+    type: "microbenchmark",
+    runtime: "zigttp",
+    benchmarks: allBenchmarks,
+    timestamp: new Date().toISOString(),
+  };
+
+  // Save the combined suite for reference
+  const fullSuiteScript = await buildSuiteScript(config, "zigttp");
+  await Deno.writeTextFile(join(resultsDir, "microbench_suite.js"), fullSuiteScript);
+  await saveResult(resultsDir, "microbench_zigttp.json", result);
+  console.log("");
+  return result;
 }
 
 /**
@@ -259,7 +308,7 @@ export async function runMicrobenchmarks(
   if (runtime === "deno") {
     return await runDenoMicrobench(suiteScript, resultsDir);
   } else {
-    return await runZigttpMicrobench(suiteScript, resultsDir);
+    return await runZigttpMicrobench(suiteScript, resultsDir, config);
   }
 }
 
@@ -284,7 +333,7 @@ export async function runAllMicrobenchmarks(
     const suiteScript = await buildSuiteScript(config, runtime);
     const result = runtime === "deno"
       ? await runDenoMicrobench(suiteScript, resultsDir)
-      : await runZigttpMicrobench(suiteScript, resultsDir);
+      : await runZigttpMicrobench(suiteScript, resultsDir, config);
     results.set(runtime, result);
   }
 
