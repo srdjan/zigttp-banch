@@ -47,15 +47,24 @@ export type MicrobenchResult = {
 /**
  * Build the concatenated suite script from runner.js + benchmarks/*.js + suite.js
  */
-async function buildSuiteScript(config: MicrobenchConfig): Promise<string> {
+async function buildSuiteScript(config: MicrobenchConfig, runtime: Runtime): Promise<string> {
   const files: string[] = [join(microbenchDir, "runner.js")];
 
   // Add all benchmark files sorted alphabetically
   const benchmarkDir = join(microbenchDir, "benchmarks");
   const benchmarkFiles: string[] = [];
 
+  // Benchmarks that are incompatible with zigttp (use unsupported native functions)
+  const zigttpIncompatible: string[] = [
+    // Temporarily enabled for diagnostic investigation
+  ];
+
   for await (const entry of Deno.readDir(benchmarkDir)) {
     if (entry.isFile && entry.name.endsWith(".js")) {
+      // Skip incompatible benchmarks for zigttp runtime
+      if (runtime === "zigttp" && zigttpIncompatible.includes(entry.name)) {
+        continue;
+      }
       benchmarkFiles.push(join(benchmarkDir, entry.name));
     }
   }
@@ -88,7 +97,17 @@ async function buildSuiteScript(config: MicrobenchConfig): Promise<string> {
 
   // Concatenate all source files
   for (const file of files) {
-    const content = await Deno.readTextFile(file);
+    let content = await Deno.readTextFile(file);
+
+    // For zigttp, remove the range polyfill section from runner.js
+    // zigttp provides range() as a builtin and can't parse while loops
+    if (runtime === "zigttp" && file.endsWith("runner.js")) {
+      content = content.replace(
+        /\/\/ range\(\) polyfill for Deno[\s\S]*?\/\/ end range\(\) polyfill/,
+        "// range() polyfill removed for zigttp (builtin provided)"
+      );
+    }
+
     script += content + "\n";
   }
 
@@ -235,7 +254,7 @@ export async function runMicrobenchmarks(
   resultsDir: string,
   config: MicrobenchConfig = {}
 ): Promise<MicrobenchResult | null> {
-  const suiteScript = await buildSuiteScript(config);
+  const suiteScript = await buildSuiteScript(config, runtime);
 
   if (runtime === "deno") {
     return await runDenoMicrobench(suiteScript, resultsDir);
@@ -261,9 +280,8 @@ export async function runAllMicrobenchmarks(
   }
   console.log("");
 
-  const suiteScript = await buildSuiteScript(config);
-
   for (const runtime of runtimes) {
+    const suiteScript = await buildSuiteScript(config, runtime);
     const result = runtime === "deno"
       ? await runDenoMicrobench(suiteScript, resultsDir)
       : await runZigttpMicrobench(suiteScript, resultsDir);

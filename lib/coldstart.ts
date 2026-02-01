@@ -55,8 +55,15 @@ async function measureColdStart(
       stderr: "null",
     });
   } else {
+    // Use embedded bytecode if available (no handler path = embedded mode)
+    // Otherwise use runtime parsing (handler path overrides embedded)
+    const useEmbedded = Deno.env.get("ZIGTTP_USE_EMBEDDED") === "true";
+    const args = useEmbedded
+      ? ["-p", String(port), "-q"]
+      : ["-p", String(port), "-q", handlerPath];
+
     cmd = new Deno.Command(ZIGTTP_SERVER_BIN, {
-      args: ["-p", String(port), "-q", handlerPath],
+      args,
       stdout: "null",
       stderr: "null",
     });

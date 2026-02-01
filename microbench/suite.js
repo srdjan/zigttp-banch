@@ -60,9 +60,7 @@ if (shouldRun('dynamicProps')) {
     results.dynamicProps = runBench('dynamicProps', runDynamicProps, DYNAMIC_PROPS_ITERATIONS);
 }
 if (shouldRun('arrayOps')) {
-    if (runtime !== 'zigttp') {
-        results.arrayOps = runBench('arrayOps', runArrayOps, ARRAY_OPS_ITERATIONS);
-    }
+    results.arrayOps = runBench('arrayOps', runArrayOps, ARRAY_OPS_ITERATIONS);
 }
 if (shouldRun('nestedAccess')) {
     results.nestedAccess = runBench('nestedAccess', runNestedAccess, NESTED_ACCESS_ITERATIONS);

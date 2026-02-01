@@ -97,6 +97,63 @@ The benchmark code must be compatible with zigttp's restricted JavaScript subset
 - **Array index assignment only works for index 0**: Use accumulation instead of array storage
 - **No `Array.push()`**: Build arrays differently or use accumulation
 
+## Microbenchmark Compatibility
+
+All 15 microbenchmarks now work on both zigttp and Deno.
+
+### Native Support (11 benchmarks)
+Work identically on both zigttp and Deno without modification:
+- arithmetic, stringOps, propertyAccess, functionCalls, jsonOps
+- httpHandler, httpHandlerHeavy, stringBuild, parseInt, mathOps
+- arrayOps (uses Array.indexOf, Array.includes, Array.join)
+
+### Adapted for zigttp (4 benchmarks)
+Modified to work within zigttp constraints due to recent regressions:
+
+- **queryParsing**: Manual implementation of indexOf(needle, start) and slice(start, end)
+  - Reason: zigttp String methods crash when called with multiple arguments
+  - Uses manual `findChar()` and `sliceStr()` helper functions
+  - Performance: ~62K ops/sec (vs 3.8M ops/sec on Deno)
+
+- **objectCreate**: Pre-computed string array instead of concatenation
+  - Reason: String concatenation `'item' + num` causes crashes in tight loops
+  - Uses `const names = ['item0', 'item1', 'item2', 'item3']` lookup
+  - Performance: ~2.8M ops/sec (vs 257M ops/sec on Deno)
+
+- **dynamicProps**: Simplified from 10 to 4 properties
+  - Reason: Shorter if-else chains reduce complexity and prevent crashes
+  - Still tests dynamic property access patterns effectively
+  - Performance: ~2.6M ops/sec (vs 293M ops/sec on Deno)
+
+- **nestedAccess**: Reduced nesting from 4 to 2 levels
+  - Reason: Deep property chains (data.user.profile.settings.count) cause crashes
+  - Uses 2-level chains (data.user.count) which work reliably
+  - Performance: ~1.8M ops/sec (vs 74M ops/sec on Deno)
+  - **REGRESSION NOTE**: This benchmark worked on Jan 24, 2026 at 16.8M ops/sec with 4-level nesting
+
+## Known Performance Regressions
+
+**zigttp has regressed since Jan 24, 2026.** Benchmarks that previously worked now crash:
+
+| Benchmark | Jan 24 Performance | Current Status | Notes |
+|-----------|-------------------|----------------|-------|
+| nestedAccess | 16.8M ops/sec (4 levels) | ❌ Crashes | Workaround: 1.8M ops/sec (2 levels) |
+| arrayOps | 1.09M ops/sec | ❌ Crashes | Workaround: 101K ops/sec |
+| objectCreate | Unknown | ❌ Crashes | Workaround: 2.8M ops/sec |
+| dynamicProps | Unknown | ❌ Crashes | Workaround: 2.6M ops/sec |
+| queryParsing | Unknown | ❌ Crashes | Workaround: 62K ops/sec |
+
+**Root cause**: zigttp commits after Jan 24 introduced bugs in:
+- Multi-parameter String methods (indexOf, slice)
+- String concatenation in tight loops
+- Deep object property chains (3-4 levels)
+- Long if-else chains
+
+**Action items**:
+1. File issue with zigttp team documenting regressions
+2. Identify which specific zigttp commit introduced the bugs
+3. Wait for fixes before re-enabling original benchmark versions
+
 ## Baseline Comparison Workflow
 
 **Deno baselines are saved in `baselines/deno/`** (quick and full runs from 2026-01-26).

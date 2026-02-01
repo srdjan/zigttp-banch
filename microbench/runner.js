@@ -1,17 +1,28 @@
 // Universal microbenchmark runner
 // Works in Deno and zigttp
 
-if (typeof range === 'undefined') {
-    function range(n) {
-        if (typeof n !== 'number' || n <= 0) return [];
+const isZigttpRuntime = typeof Response !== 'undefined' && typeof Response.json === 'function' && typeof Deno === 'undefined';
+
+// range() polyfill for Deno (zigttp provides builtin)
+if (!isZigttpRuntime && typeof range === 'undefined') {
+    function rangePolyfill(n) {
+        const result = [];
+        if (typeof n !== 'number' || n <= 0) return result;
         const size = n | 0;
-        if (size <= 0) return [];
-        return Array.from({ length: size }, (_, i) => i);
+        if (size <= 0) return result;
+        result.length = size;
+        let i = 0;
+        while (i < size) {
+            result[i] = i;
+            i = i + 1;
+        }
+        return result;
     }
     if (typeof globalThis !== 'undefined') {
-        globalThis.range = range;
+        globalThis.range = rangePolyfill;
     }
 }
+// end range() polyfill
 
 const WARMUP_ITERATIONS = 20;
 const MEASURED_ITERATIONS = 30;
@@ -28,11 +39,6 @@ const globalConfig =
     typeof __benchConfig !== 'undefined' && __benchConfig && typeof __benchConfig === 'object'
         ? __benchConfig
         : null;
-
-const isZigttpRuntime =
-    typeof Response !== 'undefined' &&
-    typeof Response.json === 'function' &&
-    typeof Deno === 'undefined';
 
 function toMsFromNs(value) {
     if (typeof value === 'bigint') {
