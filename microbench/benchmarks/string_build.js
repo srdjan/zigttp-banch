@@ -26,9 +26,6 @@ function runStringBuild(seed = 0) {
     return result;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runStringBuild, INNER_ITERATIONS: STRING_BUILD_ITERATIONS, name: 'stringBuild' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runStringBuild = runStringBuild;
     globalThis.STRING_BUILD_ITERATIONS = STRING_BUILD_ITERATIONS;

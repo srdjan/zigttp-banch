@@ -73,7 +73,7 @@ export async function waitForServer(
 /**
  * Find a free port in the ephemeral range
  */
-export async function pickFreePort(startPort: number = 49152): Promise<number> {
+async function pickFreePort(startPort: number = 49152): Promise<number> {
   // Try ports starting from startPort up to 65535
   for (let port = startPort; port <= 65535; port++) {
     if (await isPortFree(port)) {

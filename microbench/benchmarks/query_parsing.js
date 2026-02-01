@@ -95,9 +95,6 @@ function runQueryParsing(seed = 0) {
     return result;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runQueryParsing, INNER_ITERATIONS: QUERY_PARSING_ITERATIONS, name: 'queryParsing' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runQueryParsing = runQueryParsing;
     globalThis.QUERY_PARSING_ITERATIONS = QUERY_PARSING_ITERATIONS;

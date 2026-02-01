@@ -23,9 +23,6 @@ function runParseInt(seed = 0) {
     return result;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runParseInt, INNER_ITERATIONS: PARSE_INT_ITERATIONS, name: 'parseInt' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runParseInt = runParseInt;
     globalThis.PARSE_INT_ITERATIONS = PARSE_INT_ITERATIONS;

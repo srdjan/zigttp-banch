@@ -64,13 +64,6 @@ function runHttpHandlerHeavy(seed = 0) {
     return responses;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        runHttpHandlerHeavy,
-        INNER_ITERATIONS: HTTP_HANDLER_HEAVY_ITERATIONS,
-        name: 'httpHandlerHeavy'
-    };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runHttpHandlerHeavy = runHttpHandlerHeavy;
     globalThis.HTTP_HANDLER_HEAVY_ITERATIONS = HTTP_HANDLER_HEAVY_ITERATIONS;

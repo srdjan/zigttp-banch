@@ -3,7 +3,7 @@
  * Builds and executes JavaScript benchmark suite
  */
 
-import { join, dirname, fromFileUrl } from "https://deno.land/std@0.220.0/path/mod.ts";
+import { join } from "https://deno.land/std@0.220.0/path/mod.ts";
 import { type Runtime, ZIGTTP_BENCH_BIN, projectDir } from "./runtime.ts";
 import { saveResult } from "./results.ts";
 
@@ -54,17 +54,8 @@ async function buildSuiteScript(config: MicrobenchConfig, runtime: Runtime): Pro
   const benchmarkDir = join(microbenchDir, "benchmarks");
   const benchmarkFiles: string[] = [];
 
-  // Benchmarks that are incompatible with zigttp (use unsupported native functions)
-  const zigttpIncompatible: string[] = [
-    // Temporarily enabled for diagnostic investigation
-  ];
-
   for await (const entry of Deno.readDir(benchmarkDir)) {
     if (entry.isFile && entry.name.endsWith(".js")) {
-      // Skip incompatible benchmarks for zigttp runtime
-      if (runtime === "zigttp" && zigttpIncompatible.includes(entry.name)) {
-        continue;
-      }
       benchmarkFiles.push(join(benchmarkDir, entry.name));
     }
   }
@@ -227,7 +218,6 @@ async function runZigttpGroup(
  * Splits into groups to avoid segfault with 9+ benchmarks in one process.
  */
 async function runZigttpMicrobench(
-  _suiteScript: string,
   resultsDir: string,
   config: MicrobenchConfig = {},
 ): Promise<MicrobenchResult | null> {
@@ -296,23 +286,6 @@ async function runZigttpMicrobench(
 }
 
 /**
- * Run microbenchmarks for a single runtime
- */
-export async function runMicrobenchmarks(
-  runtime: Runtime,
-  resultsDir: string,
-  config: MicrobenchConfig = {}
-): Promise<MicrobenchResult | null> {
-  const suiteScript = await buildSuiteScript(config, runtime);
-
-  if (runtime === "deno") {
-    return await runDenoMicrobench(suiteScript, resultsDir);
-  } else {
-    return await runZigttpMicrobench(suiteScript, resultsDir, config);
-  }
-}
-
-/**
  * Run microbenchmarks for all specified runtimes
  */
 export async function runAllMicrobenchmarks(
@@ -330,10 +303,14 @@ export async function runAllMicrobenchmarks(
   console.log("");
 
   for (const runtime of runtimes) {
-    const suiteScript = await buildSuiteScript(config, runtime);
-    const result = runtime === "deno"
-      ? await runDenoMicrobench(suiteScript, resultsDir)
-      : await runZigttpMicrobench(suiteScript, resultsDir, config);
+    let result: MicrobenchResult | null;
+    if (runtime === "deno") {
+      const suiteScript = await buildSuiteScript(config, runtime);
+      result = await runDenoMicrobench(suiteScript, resultsDir);
+    } else {
+      // zigttp builds its own suite scripts per group internally
+      result = await runZigttpMicrobench(resultsDir, config);
+    }
     results.set(runtime, result);
   }
 

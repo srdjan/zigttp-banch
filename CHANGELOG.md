@@ -8,12 +8,9 @@
   - `./scripts/build_optimized.sh` - Build with embedded bytecode
   - `./scripts/build_baseline.sh` - Build standard version
 - Cold start analysis scripts:
-  - `./scripts/analyze_coldstart.sh` - Baseline analysis
-  - `./scripts/analyze_coldstart_embedded.sh` - Optimized version analysis
-  - `./scripts/test_pool_sizes.sh` - Pool size impact testing
+  - `./scripts/analyze_coldstart.sh` - Phase analysis (add `--embedded` for bytecode build)
   - `./scripts/profile_coldstart.sh` - Flamegraph profiling
 - Comprehensive documentation:
-  - `OPTIMIZATIONS.md` - Complete optimization guide
   - `results/optimization_results.md` - Detailed analysis with measurements
   - `results/coldstart_analysis.md` - Profiling findings and hot spots
 - Updated `CLAUDE.md` with optimization workflow

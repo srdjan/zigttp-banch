@@ -27,9 +27,6 @@ function runMathOps(seed = 0) {
     return result;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runMathOps, INNER_ITERATIONS: MATH_OPS_ITERATIONS, name: 'mathOps' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runMathOps = runMathOps;
     globalThis.MATH_OPS_ITERATIONS = MATH_OPS_ITERATIONS;

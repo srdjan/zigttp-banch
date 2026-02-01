@@ -103,29 +103,6 @@ export async function getRuntimeVersions(): Promise<Record<string, string>> {
 }
 
 /**
- * Validate that a runtime is available, throw if not
- */
-export async function requireRuntime(runtime: Runtime): Promise<void> {
-  const runtimes = await detectRuntimes();
-
-  if (runtime === "zigttp" && !runtimes.zigttp.available) {
-    throw new Error(
-      `zigttp not available. Build with: cd ../zigttp && zig build -Doptimize=ReleaseFast`
-    );
-  }
-}
-
-/**
- * Parse runtime argument, default to "all"
- */
-export function parseRuntimeArg(arg: string | undefined): Runtime | "all" {
-  if (arg === "deno" || arg === "zigttp") {
-    return arg;
-  }
-  return "all";
-}
-
-/**
  * Get list of runtimes to run based on argument and availability
  */
 export async function getRuntimesToRun(runtimeArg: Runtime | "all"): Promise<Runtime[]> {

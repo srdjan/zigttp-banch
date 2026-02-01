@@ -40,13 +40,6 @@ const globalConfig =
         ? __benchConfig
         : null;
 
-function toMsFromNs(value) {
-    if (typeof value === 'bigint') {
-        return Number(value) / 1000000;
-    }
-    return value / 1000000;
-}
-
 function probeClock(now) {
     let last = now();
     for (let _ of range(6)) {

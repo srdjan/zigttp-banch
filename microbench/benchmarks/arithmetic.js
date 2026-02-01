@@ -15,9 +15,6 @@ function runArithmetic(seed = 0) {
 }
 
 // For module systems
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runArithmetic, INNER_ITERATIONS: ARITHMETIC_ITERATIONS, name: 'arithmetic' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runArithmetic = runArithmetic;
     globalThis.ARITHMETIC_ITERATIONS = ARITHMETIC_ITERATIONS;

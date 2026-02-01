@@ -19,9 +19,6 @@ function runFunctionCalls(seed = 0) {
     return result;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runFunctionCalls, INNER_ITERATIONS: FUNCTION_CALLS_ITERATIONS, name: 'functionCalls' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runFunctionCalls = runFunctionCalls;
     globalThis.FUNCTION_CALLS_ITERATIONS = FUNCTION_CALLS_ITERATIONS;

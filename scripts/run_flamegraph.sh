@@ -103,17 +103,18 @@ fi
 
 printf '%s' "$BENCH_SCRIPT" > "$SUITE_PATH"
 
-ZIGTP_PROJECT_DIR="${ZIGTP_PROJECT_DIR:-$PROJECT_DIR/../zigttp}"
-ZIGTP_BUILD_FLAGS="${ZIGTP_BUILD_FLAGS:--Doptimize=ReleaseFast}"
-ZIGTP_AUTO_RELEASE_BUILD="false"
+# Accept ZIGTTP_DIR (preferred) or legacy ZIGTP_PROJECT_DIR
+ZIGTTP_DIR="${ZIGTTP_DIR:-${ZIGTP_PROJECT_DIR:-$PROJECT_DIR/../zigttp}}"
+ZIGTTP_BUILD_FLAGS="${ZIGTTP_BUILD_FLAGS:-${ZIGTP_BUILD_FLAGS:--Doptimize=ReleaseFast}}"
+ZIGTTP_AUTO_RELEASE_BUILD="false"
 
 if [[ -z "${ZIGTTP_BIN:-}" ]]; then
-    ZIGTTP_BIN="$ZIGTP_PROJECT_DIR/zig-out/bin/zigttp-bench"
-    ZIGTP_AUTO_RELEASE_BUILD="true"
+    ZIGTTP_BIN="$ZIGTTP_DIR/zig-out/bin/zigttp-bench"
+    ZIGTTP_AUTO_RELEASE_BUILD="true"
 fi
 
 build_zigttp_bench_release() {
-    if [[ -n "${ZIGTP_SKIP_RELEASE_BUILD:-}" ]]; then
+    if [[ -n "${ZIGTTP_SKIP_RELEASE_BUILD:-${ZIGTP_SKIP_RELEASE_BUILD:-}}" ]]; then
         return
     fi
 
@@ -122,72 +123,29 @@ build_zigttp_bench_release() {
         exit 1
     fi
 
-    echo "Building zigttp-bench release (bench $ZIGTP_BUILD_FLAGS)"
+    echo "Building zigttp-bench release (bench $ZIGTTP_BUILD_FLAGS)"
     (
-        cd "$ZIGTP_PROJECT_DIR"
-        zig build bench $ZIGTP_BUILD_FLAGS
+        cd "$ZIGTTP_DIR"
+        zig build bench $ZIGTTP_BUILD_FLAGS
     )
 }
 
-if [[ "$ZIGTP_AUTO_RELEASE_BUILD" == "true" ]]; then
+if [[ "$ZIGTTP_AUTO_RELEASE_BUILD" == "true" ]]; then
     build_zigttp_bench_release
 fi
 
 if [[ ! -x "$ZIGTTP_BIN" ]]; then
     echo "zigttp-bench not found at $ZIGTTP_BIN"
-    echo "Build it first: cd ../zigttp && zig build bench $ZIGTP_BUILD_FLAGS"
+    echo "Build it first: cd ../zigttp && zig build bench $ZIGTTP_BUILD_FLAGS"
     exit 1
 fi
 
-FLAMEGRAPH_DIR="${FLAMEGRAPH_DIR:-$PROJECT_DIR/tools/FlameGraph}"
-FLAMEGRAPH_BIN=""
-STACKCOLLAPSE_BIN=""
+# Shared flamegraph tools (ensure_flamegraph_tools, detect_profile_method)
+source "$SCRIPT_DIR/flamegraph_tools.sh"
 
-ensure_flamegraph_tools() {
-    local mode=$1
-
-    if command -v flamegraph.pl &> /dev/null; then
-        FLAMEGRAPH_BIN="$(command -v flamegraph.pl)"
-    fi
-
-    if [[ "$mode" == "sample" ]]; then
-        if command -v stackcollapse-sample.awk &> /dev/null; then
-            STACKCOLLAPSE_BIN="$(command -v stackcollapse-sample.awk)"
-        fi
-    else
-        if command -v stackcollapse-perf.pl &> /dev/null; then
-            STACKCOLLAPSE_BIN="$(command -v stackcollapse-perf.pl)"
-        fi
-    fi
-
-    if [[ -n "$FLAMEGRAPH_BIN" && -n "$STACKCOLLAPSE_BIN" ]]; then
-        return 0
-    fi
-
-    if [[ ! -d "$FLAMEGRAPH_DIR" ]]; then
-        echo "Fetching FlameGraph tools..."
-        git clone --depth 1 https://github.com/brendangregg/FlameGraph "$FLAMEGRAPH_DIR"
-    fi
-
-    FLAMEGRAPH_BIN="$FLAMEGRAPH_DIR/flamegraph.pl"
-    if [[ "$mode" == "sample" ]]; then
-        STACKCOLLAPSE_BIN="$FLAMEGRAPH_DIR/stackcollapse-sample.awk"
-    else
-        STACKCOLLAPSE_BIN="$FLAMEGRAPH_DIR/stackcollapse-perf.pl"
-    fi
-}
-
-OS_NAME="$(uname -s)"
 PROFILE_METHOD="${PROFILE_METHOD:-}"
 if [[ -z "$PROFILE_METHOD" ]]; then
-    if [[ "$OS_NAME" == "Darwin" ]]; then
-        PROFILE_METHOD="sample"
-    elif [[ "$OS_NAME" == "Linux" ]]; then
-        PROFILE_METHOD="perf"
-    else
-        echo "Unsupported OS for profiling: $OS_NAME"
-        exit 1
-    fi
+    detect_profile_method
 fi
 
 ensure_flamegraph_tools "$PROFILE_METHOD"

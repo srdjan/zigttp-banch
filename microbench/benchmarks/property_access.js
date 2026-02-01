@@ -13,9 +13,6 @@ function runPropertyAccess(seed = 0) {
     return sum;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runPropertyAccess, INNER_ITERATIONS: PROPERTY_ACCESS_ITERATIONS, name: 'propertyAccess' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runPropertyAccess = runPropertyAccess;
     globalThis.PROPERTY_ACCESS_ITERATIONS = PROPERTY_ACCESS_ITERATIONS;

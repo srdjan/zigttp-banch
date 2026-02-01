@@ -17,9 +17,6 @@ function runJsonOps(seed = 0) {
     return count;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runJsonOps, INNER_ITERATIONS: JSON_OPS_ITERATIONS, name: 'jsonOps' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runJsonOps = runJsonOps;
     globalThis.JSON_OPS_ITERATIONS = JSON_OPS_ITERATIONS;

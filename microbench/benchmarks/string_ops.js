@@ -14,9 +14,6 @@ function runStringOps(seed = 0) {
     return count;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runStringOps, INNER_ITERATIONS: STRING_OPS_ITERATIONS, name: 'stringOps' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runStringOps = runStringOps;
     globalThis.STRING_OPS_ITERATIONS = STRING_OPS_ITERATIONS;

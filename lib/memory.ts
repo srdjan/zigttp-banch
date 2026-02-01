@@ -7,6 +7,7 @@ import { type Runtime } from "./runtime.ts";
 import { ensurePortFree, getDefaultPort } from "./ports.ts";
 import { startServer, stopServer, type ServerHandle } from "./server.ts";
 import { saveResult } from "./results.ts";
+import { sleep, computeStats, isoTimestamp } from "./utils.ts";
 
 export type MemoryConfig = {
   loadDurationSecs: number;
@@ -77,7 +78,7 @@ async function sampleRss(
     if (rss > 0) {
       samples.push(rss);
     }
-    await new Promise((r) => setTimeout(r, intervalMs));
+    await sleep(intervalMs);
   }
 
   return samples;
@@ -127,7 +128,7 @@ export async function runMemoryProfile(
 
   try {
     // Measure baseline RSS (before load)
-    await new Promise((r) => setTimeout(r, 1000)); // Wait for server to stabilize
+    await sleep(1000); // Wait for server to stabilize
     const baselineKb = await getRssKb(handle.pid);
     console.log(`  Baseline RSS: ${baselineKb} KB`);
 
@@ -163,21 +164,17 @@ export async function runMemoryProfile(
     }
 
     // Calculate statistics
-    const sorted = [...samples].sort((a, b) => a - b);
-    const sum = sorted.reduce((a, b) => a + b, 0);
-    const avgKb = Math.round(sum / sorted.length);
-    const peakKb = sorted[sorted.length - 1];
-    const minKb = sorted[0];
+    const stats = computeStats(samples);
 
-    console.log(`  Peak RSS: ${peakKb} KB`);
-    console.log(`  Avg RSS: ${avgKb} KB`);
+    console.log(`  Peak RSS: ${stats.max} KB`);
+    console.log(`  Avg RSS: ${stats.mean} KB`);
     console.log("");
 
     const metrics: MemoryMetrics = {
       baseline_kb: baselineKb,
-      peak_kb: peakKb,
-      avg_kb: avgKb,
-      min_kb: minKb,
+      peak_kb: stats.max,
+      avg_kb: stats.mean,
+      min_kb: stats.min,
       samples: samples.length,
       samples_raw: samples,
     };
@@ -186,7 +183,7 @@ export async function runMemoryProfile(
       type: "memory_profile",
       runtime,
       metrics,
-      timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+      timestamp: isoTimestamp(),
     };
 
     // Save result
@@ -221,7 +218,7 @@ export async function runAllMemoryProfiles(
     // Cooldown between runtimes
     if (i < runtimes.length - 1) {
       console.log("Cooldown: 2s before next runtime...");
-      await new Promise((r) => setTimeout(r, 2000));
+      await sleep(2000);
     }
   }
 

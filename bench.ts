@@ -16,7 +16,8 @@
  */
 
 import { getRuntimesToRun, detectRuntimes, type Runtime } from "./lib/runtime.ts";
-import { createResultsDir, saveResult, saveSystemInfo, loadResults } from "./lib/results.ts";
+import { createResultsDir, saveResult, saveSystemInfo, loadResults, getBaselineDir } from "./lib/results.ts";
+import { detectMode } from "./lib/utils.ts";
 import { runAllHttpBenchmarks, type HttpConfig } from "./lib/http.ts";
 import { runAllColdStartBenchmarks, type ColdStartConfig } from "./lib/coldstart.ts";
 import { runAllMemoryProfiles, type MemoryConfig } from "./lib/memory.ts";
@@ -204,17 +205,13 @@ async function runCompare(options: Options): Promise<void> {
     Deno.exit(1);
   }
 
-  const { getBaselineDir } = await import("./lib/results.ts");
-
-  let mode: "quick" | "full" = options.target.includes("quick") ? "quick" : "full";
+  let mode: "quick" | "full" = "full";
   try {
     const rawResults = await loadResults(options.target);
-    const meta = rawResults["run_meta.json"] as { mode?: string } | undefined;
-    if (meta?.mode === "quick" || meta?.mode === "full") {
-      mode = meta.mode;
-    }
+    mode = detectMode(options.target, rawResults);
   } catch {
-    // Fall back to name-based detection
+    // Fall back to default
+    mode = options.target.includes("quick") ? "quick" : "full";
   }
   const baselineDir = getBaselineDir(mode);
 

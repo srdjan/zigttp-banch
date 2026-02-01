@@ -58,14 +58,25 @@ Runtime argument is optional: `deno`, `zigttp`, or `all` (default).
 - `memory.ts`: Memory profiling
 - `microbench.ts`: Microbenchmark runner
 - `analyze.ts`: Report generation
+- `utils.ts`: Shared utilities (sleep, stats, timestamps)
 
-**handlers/**: HTTP server implementations per runtime. Each implements identical endpoints (`/api/health`, `/api/echo`, `/api/greet/:name`). zigttp handler at `handlers/zigttp/handler.js` is synchronous-only with minimal API surface.
+**handlers/**: HTTP server implementations per runtime. Both implement `/api/health`, `/api/echo`, and `/api/greet/:name`, though with behavioral differences (see "Known Handler Differences" below). zigttp handler at `handlers/zigttp/handler.js` is synchronous-only with minimal API surface.
 
 **microbench/**: JavaScript benchmark suite. `runner.js` provides timing harness with runtime detection for high-res timers. `suite.js` orchestrates benchmark execution. Individual benchmarks in `benchmarks/` directory.
 
 **results/**: Output directory (gitignored). Each run creates `YYYYMMDD_HHMMSS_PID_RAND/` subdirectory containing JSON results and generated `report.md`.
 
 **baselines/deno/**: Saved Deno benchmark results for comparison (quick and full runs).
+
+## Known Handler Differences
+
+The handlers are not fully identical across runtimes. These affect benchmark comparability:
+
+- `/api/echo`: zigttp returns a fixed `{ok: true}` stub; Deno does full request reflection (method, headers, body)
+- `/api/greet/:name`: zigttp uses `rawJson` bypassing JSON serialization overhead; Deno uses standard `JSON.stringify`
+- `/api/health`: zigttp hardcodes `timestamp: 0`; Deno uses `Date.now()`
+
+These differences are intentional trade-offs reflecting zigttp's minimal API surface. Fixing them would change benchmark results and should be a separate decision.
 
 ## Key Constraints
 

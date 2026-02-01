@@ -37,9 +37,6 @@ function runNestedAccess(seed = 0) {
     return result;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runNestedAccess, INNER_ITERATIONS: NESTED_ACCESS_ITERATIONS, name: 'nestedAccess' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runNestedAccess = runNestedAccess;
     globalThis.NESTED_ACCESS_ITERATIONS = NESTED_ACCESS_ITERATIONS;

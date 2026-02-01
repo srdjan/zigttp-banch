@@ -6,6 +6,7 @@ import { type Runtime } from "./runtime.ts";
 import { ensurePortFree, getDefaultPort } from "./ports.ts";
 import { startServer, stopServer, type ServerHandle } from "./server.ts";
 import { saveResult } from "./results.ts";
+import { sleep, isoTimestamp } from "./utils.ts";
 
 export type EndpointConfig = {
   path: string;
@@ -41,19 +42,6 @@ export type HttpResult = {
   metrics: HttpMetrics;
   timestamp: string;
 };
-
-// Generate realistic test data for /api/transform
-function generateTransformPayload(itemCount: number = 100): string {
-  const items = [];
-  for (let i = 0; i < itemCount; i++) {
-    items.push({
-      id: i,
-      value: Math.floor(Math.random() * 100),
-      active: Math.random() > 0.1, // 90% active
-    });
-  }
-  return JSON.stringify({ items });
-}
 
 const DEFAULT_CONFIG: HttpConfig = {
   connections: 10,
@@ -201,7 +189,7 @@ async function warmup(
 
   try {
     await cmd.output();
-    await new Promise((r) => setTimeout(r, 1000));
+    await sleep(1000);
   } catch {
     // Warmup failure is non-fatal
   } finally {
@@ -268,7 +256,7 @@ async function benchmarkEndpoint(
     duration: config.duration,
     warmup_requests: config.warmupRequests,
     metrics,
-    timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+    timestamp: isoTimestamp(),
   };
 
   // Save result
@@ -349,7 +337,7 @@ export async function runAllHttpBenchmarks(
     // Cooldown between runtimes (not after the last one)
     if (i < runtimes.length - 1) {
       console.log(`Cooldown: ${fullConfig.cooldownSecs}s before next runtime...`);
-      await new Promise((r) => setTimeout(r, fullConfig.cooldownSecs * 1000));
+      await sleep(fullConfig.cooldownSecs * 1000);
     }
   }
 

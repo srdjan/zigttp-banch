@@ -30,9 +30,6 @@ function runObjectCreate(seed) {
     return count;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runObjectCreate, INNER_ITERATIONS: OBJECT_CREATE_ITERATIONS, name: 'objectCreate' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runObjectCreate = runObjectCreate;
     globalThis.OBJECT_CREATE_ITERATIONS = OBJECT_CREATE_ITERATIONS;

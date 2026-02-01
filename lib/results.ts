@@ -4,6 +4,7 @@
 
 import { join } from "https://deno.land/std@0.220.0/path/mod.ts";
 import { projectDir, getRuntimeVersions } from "./runtime.ts";
+import { isoTimestamp } from "./utils.ts";
 
 const resultsBase = join(projectDir, "results");
 const baselinesDir = join(projectDir, "baselines");
@@ -83,7 +84,7 @@ async function getLinuxInfo(): Promise<{ cpu_model: string; ram_gb: number }> {
 /**
  * Collect system information
  */
-export async function collectSystemInfo(): Promise<SystemInfo> {
+async function collectSystemInfo(): Promise<SystemInfo> {
   const os = Deno.build.os === "darwin" ? "Darwin" : Deno.build.os;
   const arch = Deno.build.arch;
 
@@ -108,7 +109,7 @@ export async function collectSystemInfo(): Promise<SystemInfo> {
   const runtimes = await getRuntimeVersions();
 
   return {
-    timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+    timestamp: isoTimestamp(),
     os,
     os_version: osVersion,
     arch,

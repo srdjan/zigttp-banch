@@ -7,6 +7,7 @@ import { join } from "https://deno.land/std@0.220.0/path/mod.ts";
 import { type Runtime, ZIGTTP_SERVER_BIN, projectDir } from "./runtime.ts";
 import { ensurePortFree, getDefaultPort, isPortFree, waitForServer } from "./ports.ts";
 import { saveResult } from "./results.ts";
+import { sleep, computeStats, isoTimestamp } from "./utils.ts";
 
 export type ColdStartConfig = {
   iterations: number;
@@ -86,7 +87,7 @@ async function measureColdStart(
   // Wait for port to be free again
   let attempts = 0;
   while (attempts < 50 && !(await isPortFree(port))) {
-    await new Promise((r) => setTimeout(r, 100));
+    await sleep(100);
     attempts++;
   }
 
@@ -95,15 +96,6 @@ async function measureColdStart(
   }
 
   return Math.round(endUs - startUs);
-}
-
-/**
- * Calculate percentile from sorted array
- */
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
-  return sorted[idx];
 }
 
 /**
@@ -148,26 +140,19 @@ export async function runColdStartBenchmarks(
   }
 
   // Calculate statistics
-  const sorted = [...samples].sort((a, b) => a - b);
-  const sum = sorted.reduce((a, b) => a + b, 0);
-  const mean = Math.round(sum / sorted.length);
-  const median = percentile(sorted, 0.5);
-  const p95 = percentile(sorted, 0.95);
-  const p99 = percentile(sorted, 0.99);
-  const min = sorted[0];
-  const max = sorted[sorted.length - 1];
+  const stats = computeStats(samples);
 
   const metrics: ColdStartMetrics = {
-    mean_us: mean,
-    median_us: median,
-    p95_us: p95,
-    p99_us: p99,
-    min_us: min,
-    max_us: max,
-    samples: sorted.length,
+    mean_us: stats.mean,
+    median_us: stats.median,
+    p95_us: stats.p95,
+    p99_us: stats.p99,
+    min_us: stats.min,
+    max_us: stats.max,
+    samples: samples.length,
   };
 
-  console.log(`  Results: mean=${mean}us, median=${median}us, p99=${p99}us`);
+  console.log(`  Results: mean=${stats.mean}us, median=${stats.median}us, p99=${stats.p99}us`);
   console.log("");
 
   const result: ColdStartResult = {
@@ -175,7 +160,7 @@ export async function runColdStartBenchmarks(
     runtime,
     iterations,
     metrics,
-    timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+    timestamp: isoTimestamp(),
   };
 
   // Save result
@@ -207,7 +192,7 @@ export async function runAllColdStartBenchmarks(
     // Cooldown between runtimes
     if (i < runtimes.length - 1) {
       console.log("Cooldown: 2s before next runtime...");
-      await new Promise((r) => setTimeout(r, 2000));
+      await sleep(2000);
     }
   }
 

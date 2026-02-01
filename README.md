@@ -2,68 +2,44 @@
 
 Comprehensive performance comparison of [zigttp](https://github.com/srdjan/zigttp) against Deno.
 
-## Cold Start Optimization
-
-**New**: zigttp cold starts can be reduced by 16% (83ms → 71ms) using embedded bytecode precompilation:
-
-```bash
-./scripts/build_optimized.sh
-```
-
-See [OPTIMIZATIONS.md](OPTIMIZATIONS.md) for detailed analysis and profiling results.
-
 ## Quick Start
 
 ```bash
 # Run quick validation (1 connection, short duration)
-./scripts/run.sh quick
+deno run -A bench.ts quick
 
-# Run full benchmark suite
-./scripts/run.sh full
+# Run full benchmark suite (HTTP + microbench + coldstart + memory)
+deno run -A bench.ts full
 
 # Run specific benchmark type
-./scripts/run.sh http     # HTTP throughput
-./scripts/run.sh microbench  # JS execution speed
-./scripts/run.sh coldstart   # Cold start times
-./scripts/run.sh memory      # Memory profiling
+deno run -A bench.ts http     # HTTP throughput
+deno run -A bench.ts micro    # JS execution speed
+deno run -A bench.ts cold     # Cold start times
+deno run -A bench.ts memory   # Memory profiling
 ```
+
+Runtime argument is optional: `deno`, `zigttp`, or `all` (default).
 
 ## Running Benchmarks
 
 ```bash
-# Run a specific runtime only (deno|zigttp)
-./scripts/run.sh microbench deno
-./scripts/run.sh http zigttp
+# Run a specific runtime only
+deno run -A bench.ts micro deno
+deno run -A bench.ts http zigttp
 
-# Run microbenchmarks (results auto-saved under ./results)
-./scripts/run_microbench.sh all
+# With options
+deno run -A bench.ts http zigttp --connections=20
+deno run -A bench.ts micro zigttp --filter=arithmetic,stringOps
+deno run -A bench.ts cold zigttp --iterations=50
 
-# Run microbenchmarks and emit a combined ops/sec table
-./scripts/run_microbench_table.sh all
+# Report generation from existing results
+deno run -A bench.ts report results/<timestamp>
+deno run -A bench.ts compare results/<timestamp>
 ```
 
 ### Historical runs
 
-- Every run is stored under `results/<timestamp>_<pid>_<rand>/` and never overwrites previous output.
-- If you set `RESULTS_DIR`, a new unique directory will still be created if the target already exists and is non-empty.
-
-### Microbenchmark filtering and tuning
-
-You can run a subset of the microbench suite and tweak iteration counts via env vars:
-
-```bash
-# Run only httpHandlerHeavy with fewer inner iterations
-BENCH_FILTER=httpHandlerHeavy \
-BENCH_HTTP_HANDLER_HEAVY_ITERATIONS=200 \
-./scripts/run_microbench.sh all
-
-# Reduce warmup and measured iterations for faster smoke tests
-BENCH_WARMUP_ITERATIONS=5 \
-BENCH_MEASURED_ITERATIONS=8 \
-BENCH_WARMUP_MS=50 \
-BENCH_MAX_MEASURED_TOTAL_MS=500 \
-./scripts/run_microbench.sh all
-```
+Every run is stored under `results/<timestamp>_<pid>_<rand>/` and never overwrites previous output.
 
 ### Flamegraph (zigttp)
 
@@ -80,9 +56,19 @@ BENCH_HTTP_HANDLER_HEAVY_ITERATIONS=4000 \
 
 The SVG is saved under `results/<timestamp>/flamegraph.svg`.
 
+## Cold Start Optimization
+
+zigttp cold starts can be reduced by 16% (83ms to 71ms) using embedded bytecode precompilation:
+
+```bash
+./scripts/build_optimized.sh
+```
+
+See `results/optimization_results.md` and `results/coldstart_analysis.md` for detailed analysis and profiling data.
+
 ## Prerequisites
 
-- Deno (tested with v2.6.4)
+- Deno
 - hey (HTTP load testing tool)
 - zigttp built with release optimizations
 
@@ -95,24 +81,30 @@ Build zigttp:
 ./scripts/build_optimized.sh
 ```
 
-Both scripts build the server and the `zigttp-bench` binary used by microbenchmarks.
-
 ## Project Structure
 
 ```
 .
-├── README.md           # This file
-├── OPTIMIZATIONS.md    # Cold start optimization guide
-├── methodology.md      # Detailed test methodology
-├── versions.json       # Pinned runtime versions
-├── features/           # Feature comparison matrix
+├── bench.ts            # Main CLI entry point
+├── lib/                # Deno TypeScript modules for benchmark orchestration
+│   ├── runtime.ts      # Runtime detection and binary paths
+│   ├── ports.ts        # Port management utilities
+│   ├── server.ts       # Server lifecycle management
+│   ├── results.ts      # Results directory and system info
+│   ├── http.ts         # HTTP benchmark runner
+│   ├── coldstart.ts    # Cold start benchmarks
+│   ├── memory.ts       # Memory profiling
+│   ├── microbench.ts   # Microbenchmark runner
+│   ├── analyze.ts      # Report generation
+│   └── utils.ts        # Shared utilities
 ├── handlers/           # HTTP handlers per runtime
 ├── microbench/         # JavaScript microbenchmarks
-├── scripts/            # Benchmark runner scripts
-├── analysis/           # Statistical analysis tools
+│   ├── runner.js       # Timing harness with runtime detection
+│   ├── suite.js        # Benchmark orchestration
+│   └── benchmarks/     # Individual benchmark files
+├── baselines/          # Saved Deno baseline results for comparison
+├── scripts/            # Build, profiling, and analysis scripts
 └── results/            # Benchmark output (gitignored)
-    ├── optimization_results.md    # Detailed optimization analysis
-    └── coldstart_analysis.md      # Profiling and hot spot analysis
 ```
 
 ## Benchmark Categories
@@ -124,23 +116,18 @@ Measures requests/second and latency percentiles for standard endpoints:
 - `/api/greet/:name` - Path parameter handling
 
 ### JavaScript Execution Speed
-Microbenchmarks testing core JS performance:
-- Integer arithmetic
-- String operations
-- Object creation
-- Property access
-- Function calls
-- JSON serialization
-- HTTP handler simulation
-- HTTP handler simulation (heavy)
+15 microbenchmarks testing core JS performance:
+- arithmetic, stringOps, objectCreate, propertyAccess, functionCalls
+- jsonOps, httpHandler, httpHandlerHeavy, stringBuild, dynamicProps
+- arrayOps, nestedAccess, queryParsing, parseInt, mathOps
 
 ### Cold Start
 Time from process spawn to first successful HTTP response.
 - Default: 100 iterations per runtime for statistical significance
 - Baseline zigttp: ~83ms (runtime handler parsing)
 - Optimized zigttp: ~71ms (embedded bytecode, 16% faster)
-- Profiling tools: `./scripts/profile_coldstart.sh`
-- Analysis scripts: `./scripts/analyze_coldstart*.sh`
+- Profiling: `./scripts/profile_coldstart.sh`
+- Analysis: `./scripts/analyze_coldstart.sh` (add `--embedded` for bytecode build)
 
 ### Memory Usage
 - Baseline RSS after startup
@@ -158,20 +145,6 @@ Results are saved to `results/<timestamp>/` with:
 
 Each run gets a unique results folder to preserve historical trends.
 
-## Analysis
-
-```bash
-# Generate report from existing results
-python3 analysis/analyze.py --results-dir results/<timestamp> --output report.md
-
-# Install Python dependencies for full statistical analysis
-pip install -r analysis/requirements.txt
-```
-
 ## Methodology
 
-See [methodology.md](methodology.md) for detailed documentation of:
-- Test protocols
-- Warmup procedures
-- Statistical methods
-- Known limitations
+See [methodology.md](methodology.md) for test protocols, warmup procedures, and statistical methods.

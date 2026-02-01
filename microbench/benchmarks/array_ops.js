@@ -43,9 +43,6 @@ function runArrayOps(seed) {
     return result;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runArrayOps, INNER_ITERATIONS: ARRAY_OPS_ITERATIONS, name: 'arrayOps' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runArrayOps = runArrayOps;
     globalThis.ARRAY_OPS_ITERATIONS = ARRAY_OPS_ITERATIONS;

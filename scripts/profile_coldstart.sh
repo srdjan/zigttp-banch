@@ -10,17 +10,18 @@ RESULTS_BASE="$PROJECT_DIR/results"
 RESULTS_DIR="${RESULTS_DIR:-$RESULTS_BASE/$(date +%Y%m%d_%H%M%S)_$$_$RANDOM}"
 mkdir -p "$RESULTS_DIR"
 
-ZIGTP_PROJECT_DIR="${ZIGTP_PROJECT_DIR:-$PROJECT_DIR/../zigttp}"
-ZIGTP_BUILD_FLAGS="${ZIGTP_BUILD_FLAGS:--Doptimize=ReleaseFast}"
+# Accept ZIGTTP_DIR (preferred) or legacy ZIGTP_PROJECT_DIR
+ZIGTTP_DIR="${ZIGTTP_DIR:-${ZIGTP_PROJECT_DIR:-$PROJECT_DIR/../zigttp}}"
+ZIGTTP_BUILD_FLAGS="${ZIGTTP_BUILD_FLAGS:-${ZIGTP_BUILD_FLAGS:--Doptimize=ReleaseFast}}"
 
 # Build zigttp server in release mode
-echo "Building zigttp server ($ZIGTP_BUILD_FLAGS)"
+echo "Building zigttp server ($ZIGTTP_BUILD_FLAGS)"
 (
-    cd "$ZIGTP_PROJECT_DIR"
-    zig build $ZIGTP_BUILD_FLAGS
+    cd "$ZIGTTP_DIR"
+    zig build $ZIGTTP_BUILD_FLAGS
 )
 
-ZIGTTP_BIN="$ZIGTP_PROJECT_DIR/zig-out/bin/zigttp-server"
+ZIGTTP_BIN="$ZIGTTP_DIR/zig-out/bin/zigttp-server"
 if [[ ! -x "$ZIGTTP_BIN" ]]; then
     echo "zigttp-server not found at $ZIGTTP_BIN"
     exit 1
@@ -29,37 +30,10 @@ fi
 HANDLER_PATH="$PROJECT_DIR/handlers/zigttp/handler.js"
 PORT="${PORT:-3100}"
 
-FLAMEGRAPH_DIR="${FLAMEGRAPH_DIR:-$PROJECT_DIR/tools/FlameGraph}"
+# Shared flamegraph tools (ensure_flamegraph_tools, detect_profile_method)
+source "$SCRIPT_DIR/flamegraph_tools.sh"
 
-ensure_flamegraph_tools() {
-    local mode=$1
-
-    if command -v flamegraph.pl &> /dev/null && \
-       [[ "$mode" == "sample" ]] && command -v stackcollapse-sample.awk &> /dev/null; then
-        FLAMEGRAPH_BIN="$(command -v flamegraph.pl)"
-        STACKCOLLAPSE_BIN="$(command -v stackcollapse-sample.awk)"
-        return 0
-    fi
-
-    if [[ ! -d "$FLAMEGRAPH_DIR" ]]; then
-        echo "Fetching FlameGraph tools..."
-        git clone --depth 1 https://github.com/brendangregg/FlameGraph "$FLAMEGRAPH_DIR"
-    fi
-
-    FLAMEGRAPH_BIN="$FLAMEGRAPH_DIR/flamegraph.pl"
-    STACKCOLLAPSE_BIN="$FLAMEGRAPH_DIR/stackcollapse-sample.awk"
-}
-
-OS_NAME="$(uname -s)"
-if [[ "$OS_NAME" == "Darwin" ]]; then
-    PROFILE_METHOD="sample"
-elif [[ "$OS_NAME" == "Linux" ]]; then
-    PROFILE_METHOD="perf"
-else
-    echo "Unsupported OS for profiling: $OS_NAME"
-    exit 1
-fi
-
+detect_profile_method
 ensure_flamegraph_tools "$PROFILE_METHOD"
 
 SAMPLE_OUT="$RESULTS_DIR/coldstart_sample.txt"

@@ -5,67 +5,17 @@
 
 import { join } from "https://deno.land/std@0.220.0/path/mod.ts";
 import { loadResults, loadBaseline, type SystemInfo } from "./results.ts";
-import { formatOpsPerSec } from "./microbench.ts";
-
-type HttpBenchmark = {
-  type: "http_benchmark";
-  runtime: string;
-  endpoint: string;
-  connections: number;
-  duration: string;
-  warmup_requests: number;
-  metrics: {
-    requests_per_second: number;
-    latency_avg_secs: number;
-    latency_p50_secs: number;
-    latency_p95_secs: number;
-    latency_p99_secs: number;
-    errors: number;
-  };
-  timestamp: string;
-};
-
-type ColdStartBenchmark = {
-  type: "cold_start";
-  runtime: string;
-  iterations: number;
-  metrics: {
-    mean_us: number;
-    median_us: number;
-    p95_us: number;
-    p99_us: number;
-    min_us: number;
-    max_us: number;
-    samples: number;
-  };
-  timestamp: string;
-};
-
-type MemoryProfile = {
-  type: "memory_profile";
-  runtime: string;
-  metrics: {
-    baseline_kb: number;
-    peak_kb: number;
-    avg_kb: number;
-    min_kb?: number;
-    samples: number;
-  };
-  timestamp: string;
-};
-
-type MicrobenchResult = {
-  type: "microbenchmark";
-  runtime: string;
-  benchmarks: Record<string, { ops_per_sec: number }>;
-  timestamp: string;
-};
+import { formatOpsPerSec, type MicrobenchResult } from "./microbench.ts";
+import { type HttpResult } from "./http.ts";
+import { type ColdStartResult } from "./coldstart.ts";
+import { type MemoryResult } from "./memory.ts";
+import { detectMode } from "./utils.ts";
 
 type ParsedResults = {
   system?: SystemInfo;
-  http: HttpBenchmark[];
-  coldstart: ColdStartBenchmark[];
-  memory: MemoryProfile[];
+  http: HttpResult[];
+  coldstart: ColdStartResult[];
+  memory: MemoryResult[];
   microbench: MicrobenchResult[];
 };
 
@@ -84,11 +34,11 @@ function parseResults(rawResults: Record<string, unknown>): ParsedResults {
     if (filename === "system_info.json") {
       parsed.system = data as SystemInfo;
     } else if (filename.startsWith("http_")) {
-      parsed.http.push(data as HttpBenchmark);
+      parsed.http.push(data as HttpResult);
     } else if (filename.startsWith("coldstart_")) {
-      parsed.coldstart.push(data as ColdStartBenchmark);
+      parsed.coldstart.push(data as ColdStartResult);
     } else if (filename.startsWith("memory_")) {
-      parsed.memory.push(data as MemoryProfile);
+      parsed.memory.push(data as MemoryResult);
     } else if (filename.startsWith("microbench_")) {
       parsed.microbench.push(data as MicrobenchResult);
     }
@@ -315,11 +265,7 @@ export async function generateReportFile(
   const results = parseResults(rawResults);
 
   // Try to load baseline for comparison
-  let mode: "quick" | "full" = resultsDir.includes("quick") ? "quick" : "full";
-  const meta = rawResults["run_meta.json"] as { mode?: string } | undefined;
-  if (meta?.mode === "quick" || meta?.mode === "full") {
-    mode = meta.mode;
-  }
+  const mode = detectMode(resultsDir, rawResults);
   const rawBaseline = await loadBaseline(mode);
   const baseline = rawBaseline ? parseResults(rawBaseline) : undefined;
 

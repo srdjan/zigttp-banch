@@ -15,9 +15,6 @@ function runHttpHandler(seed = 0) {
     return responses;
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runHttpHandler, INNER_ITERATIONS: HTTP_HANDLER_ITERATIONS, name: 'httpHandler' };
-}
 if (typeof globalThis !== 'undefined') {
     globalThis.runHttpHandler = runHttpHandler;
     globalThis.HTTP_HANDLER_ITERATIONS = HTTP_HANDLER_ITERATIONS;

@@ -127,19 +127,3 @@ export async function stopServer(handle: ServerHandle): Promise<void> {
   await waitForPortFree(handle.port, 1000);
 }
 
-/**
- * Run a function with a server, ensuring cleanup
- */
-export async function withServer<T>(
-  runtime: Runtime,
-  port: number,
-  fn: (handle: ServerHandle) => Promise<T>,
-  handlerPath?: string
-): Promise<T> {
-  const handle = await startServer(runtime, port, handlerPath);
-  try {
-    return await fn(handle);
-  } finally {
-    await stopServer(handle);
-  }
-}

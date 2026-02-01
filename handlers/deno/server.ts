@@ -1,5 +1,5 @@
 // Deno HTTP server for benchmarking
-// Mirrors zigttp handler.jsx endpoints
+// Mirrors zigttp handler.js endpoints
 
 const PORT = parseInt(Deno.env.get("PORT") || "8080", 10);
 
