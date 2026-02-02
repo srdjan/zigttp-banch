@@ -1,0 +1,17 @@
+{
+  "type": "http_benchmark",
+  "runtime": "deno",
+  "endpoint": "GET /api/process?items=500&page=3&limit=25",
+  "connections": 10,
+  "duration": "30s",
+  "warmup_requests": 1000,
+  "metrics": {
+    "requests_per_second": 101685.4304,
+    "latency_avg_secs": 0.0003,
+    "latency_p50_secs": 0.0001,
+    "latency_p95_secs": 0.0001,
+    "latency_p99_secs": 0.0002,
+    "errors": 0
+  },
+  "timestamp": "2026-02-02T20:05:30Z"
+}

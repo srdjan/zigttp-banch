@@ -1,12 +1,12 @@
 {
-    "timestamp": "2026-01-26T12:29:51Z",
-    "os": "Darwin",
-    "os_version": "25.2.0",
-    "arch": "arm64",
-    "cpu_model": "Apple M4 Pro",
-    "cpu_cores": 14,
-    "ram_gb": 24,
-    "runtimes": {
-        "deno": "2.6.6"
-    }
+  "timestamp": "2026-02-02T20:03:25Z",
+  "os": "Darwin",
+  "os_version": "25.2.0",
+  "arch": "aarch64",
+  "cpu_model": "Apple M4 Pro",
+  "cpu_cores": 14,
+  "ram_gb": 24,
+  "runtimes": {
+    "deno": "2.6.7"
+  }
 }

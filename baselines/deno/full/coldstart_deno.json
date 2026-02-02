@@ -1,7 +1,15 @@
 {
-    "type": "cold_start",
-    "runtime": "deno",
-    "iterations": 50,
-    "metrics": {"mean_us": 13228, "median_us": 13162, "p95_us": 13973, "p99_us": 14258, "min_us": 12498, "max_us": 16465, "samples": 50},
-    "timestamp": "2026-01-26T12:31:44Z"
+  "type": "cold_start",
+  "runtime": "deno",
+  "iterations": 100,
+  "metrics": {
+    "mean_us": 105726,
+    "median_us": 105759,
+    "p95_us": 107455,
+    "p99_us": 110473,
+    "min_us": 102850,
+    "max_us": 114473,
+    "samples": 100
+  },
+  "timestamp": "2026-02-02T20:11:51Z"
 }

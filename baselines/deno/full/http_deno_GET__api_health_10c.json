@@ -1,0 +1,17 @@
+{
+  "type": "http_benchmark",
+  "runtime": "deno",
+  "endpoint": "GET /api/health",
+  "connections": 10,
+  "duration": "30s",
+  "warmup_requests": 1000,
+  "metrics": {
+    "requests_per_second": 106496.5307,
+    "latency_avg_secs": 0.0003,
+    "latency_p50_secs": 0.0001,
+    "latency_p95_secs": 0.0001,
+    "latency_p99_secs": 0.0002,
+    "errors": 0
+  },
+  "timestamp": "2026-02-02T20:03:57Z"
+}
