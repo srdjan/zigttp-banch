@@ -110,13 +110,15 @@ The benchmark code must be compatible with zigttp's restricted JavaScript subset
 
 ## Microbenchmark Compatibility
 
-All 15 microbenchmarks now work on both zigttp and Deno.
+All 17 microbenchmarks now work on both zigttp and Deno.
 
-### Native Support (11 benchmarks)
+### Native Support (13 benchmarks)
 Work identically on both zigttp and Deno without modification:
 - arithmetic, stringOps, propertyAccess, functionCalls, jsonOps
 - httpHandler, httpHandlerHeavy, stringBuild, parseInt, mathOps
 - arrayOps (uses Array.indexOf, Array.includes, Array.join)
+- monoProperty (read-only property access for measuring monomorphic optimization)
+- monoPropertyWrite (write-heavy property access)
 
 ### Adapted for zigttp (4 benchmarks)
 Modified to work within zigttp constraints due to recent regressions:
@@ -213,6 +215,28 @@ This builds without embedded bytecode for comparison testing.
 - Reducing pool size: <2ms variance across 1-28 workers
 
 See `results/optimization_results.md` for detailed analysis and `results/coldstart_analysis.md` for profiling data.
+
+## NaN-boxing Performance Analysis
+
+After NaN-boxing was introduced for float optimization, an analysis was performed to understand property access performance (2026-02-04).
+
+### Key Findings
+
+| Benchmark | zigttp ops/sec | Notes |
+|-----------|---------------|-------|
+| monoProperty (read-only) | 72M | Exceeds pre-NaN-boxing 62M target |
+| monoPropertyWrite | 45M | Write-heavy workload |
+| propertyAccess (mixed) | 37M | 5 reads + 1 write per iteration |
+
+The monomorphic read path is **fully optimized** and exceeds targets. The original `propertyAccess` benchmark includes writes which have inherent overhead (2 stack pops, store operations).
+
+### Trade-off Summary
+
+- mathOps: 41.6x improvement (5M -> 208M ops/sec)
+- Monomorphic property reads: Better than pre-NaN-boxing
+- Mixed read/write: Acceptable overhead
+
+No further optimization needed for pointer extraction. See `results/nan_boxing_pointer_analysis.md` for detailed analysis.
 
 ## Prerequisites
 

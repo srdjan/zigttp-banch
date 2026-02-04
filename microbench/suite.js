@@ -84,5 +84,11 @@ if (shouldRun('parseInt')) {
 if (shouldRun('mathOps')) {
     results.mathOps = runBench('mathOps', runMathOps, MATH_OPS_ITERATIONS);
 }
+if (shouldRun('monoProperty')) {
+    results.monoProperty = runBench('monoProperty', runMonoProperty, MONO_PROPERTY_ITERATIONS);
+}
+if (shouldRun('monoPropertyWrite')) {
+    results.monoPropertyWrite = runBench('monoPropertyWrite', runMonoPropertyWrite, MONO_PROPERTY_WRITE_ITERATIONS);
+}
 
 console.log(JSON.stringify(results, null, 2));

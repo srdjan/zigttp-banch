@@ -168,7 +168,8 @@ async function runDenoMicrobench(
 const ALL_BENCHMARK_NAMES = [
   "arithmetic", "stringOps", "objectCreate", "propertyAccess", "functionCalls",
   "jsonOps", "httpHandler", "httpHandlerHeavy", "stringBuild", "dynamicProps",
-  "arrayOps", "nestedAccess", "queryParsing", "parseInt", "mathOps",
+  "arrayOps", "nestedAccess", "queryParsing", "parseInt", "mathOps", "monoProperty",
+  "monoPropertyWrite",
 ];
 
 // zigttp segfaults when running 9+ benchmarks in one process (GC/heap pressure).
