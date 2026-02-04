@@ -32,6 +32,9 @@ function runDynamicProps(seed) {
     return sum;
 }
 
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { runDynamicProps, INNER_ITERATIONS: DYNAMIC_PROPS_ITERATIONS, name: 'dynamicProps' };
+}
 if (typeof globalThis !== 'undefined') {
     globalThis.runDynamicProps = runDynamicProps;
     globalThis.DYNAMIC_PROPS_ITERATIONS = DYNAMIC_PROPS_ITERATIONS;
