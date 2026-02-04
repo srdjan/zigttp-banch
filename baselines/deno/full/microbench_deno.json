@@ -301,7 +301,47 @@
       "clock_resolution_ms": 0.00004099999932805076,
       "target_sample_ms": 20,
       "runtime": "deno"
+    },
+    "monoProperty": {
+      "name": "monoProperty",
+      "warmup_iterations": 20,
+      "warmup_ms": 100,
+      "measured_iterations": 30,
+      "inner_iterations": 20000,
+      "batch_size": 250,
+      "total_ms": 144.44391800000002,
+      "mean_ms": 4.814797266666668,
+      "median_ms": 4.807625000000002,
+      "p95_ms": 4.970459000000005,
+      "min_ms": 4.639250000000004,
+      "max_ms": 5.129166999999995,
+      "ns_per_op": 0.9629594533333335,
+      "ops_per_sec": 1038465323.2682317,
+      "clock_source": "performance.now",
+      "clock_resolution_ms": 0.00008300000000005525,
+      "target_sample_ms": 20,
+      "runtime": "deno"
+    },
+    "monoPropertyWrite": {
+      "name": "monoPropertyWrite",
+      "warmup_iterations": 20,
+      "warmup_ms": 100,
+      "measured_iterations": 30,
+      "inner_iterations": 20000,
+      "batch_size": 250,
+      "total_ms": 156.80466599999994,
+      "mean_ms": 5.226822199999998,
+      "median_ms": 5.234332999999992,
+      "p95_ms": 5.3158750000000055,
+      "min_ms": 5.055917000000022,
+      "max_ms": 5.340582999999924,
+      "ns_per_op": 1.0453644399999995,
+      "ops_per_sec": 956604186.7657181,
+      "clock_source": "performance.now",
+      "clock_resolution_ms": 0.00004099999995332837,
+      "target_sample_ms": 20,
+      "runtime": "deno"
     }
   },
-  "timestamp": "2026-02-02T20:07:49.276Z"
+  "timestamp": "2026-02-04T21:34:47.413Z"
 }
