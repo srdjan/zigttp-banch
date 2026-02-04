@@ -1,32 +1,47 @@
 // Dynamic property access benchmark
 // Tests obj.prop patterns - zigttp does not support bracket notation on objects
-// zigttp compatibility: Reduced from 10 to 4 properties (long if-else chains crash)
+// zigttp compatibility: Reduced from 10 to 8 properties (9+ if-else branches crash)
 
 const DYNAMIC_PROPS_ITERATIONS = 20000;
 
 function runDynamicProps(seed) {
     if (seed === undefined) seed = 0;
     // Use direct property access since zigttp doesn't support obj[key]
-    const obj = { p0: 1, p1: 2, p2: 3, p3: 4 };
+    const obj = {
+        p0: 1, p1: 2, p2: 3, p3: 4,
+        p4: 5, p5: 6, p6: 7, p7: 8
+    };
     let sum = 0;
 
     for (let iter of range(DYNAMIC_PROPS_ITERATIONS)) {
         // Direct property reads in sequence (simulates dynamic access pattern)
-        const idx = (iter + seed) % 4;
+        const idx = (iter + seed) % 8;
 
         // Read all properties in rotation based on idx
         if (idx === 0) {
-            sum = (sum + obj.p0 + obj.p1) % 1000000;
+            sum = (sum + obj.p0 + obj.p1 + obj.p2) % 1000000;
             obj.p0 = (obj.p0 + 1) % 100;
         } else if (idx === 1) {
-            sum = (sum + obj.p1 + obj.p2) % 1000000;
+            sum = (sum + obj.p1 + obj.p2 + obj.p3) % 1000000;
             obj.p1 = (obj.p1 + 1) % 100;
         } else if (idx === 2) {
-            sum = (sum + obj.p2 + obj.p3) % 1000000;
+            sum = (sum + obj.p2 + obj.p3 + obj.p4) % 1000000;
             obj.p2 = (obj.p2 + 1) % 100;
-        } else {
-            sum = (sum + obj.p3 + obj.p0) % 1000000;
+        } else if (idx === 3) {
+            sum = (sum + obj.p3 + obj.p4 + obj.p5) % 1000000;
             obj.p3 = (obj.p3 + 1) % 100;
+        } else if (idx === 4) {
+            sum = (sum + obj.p4 + obj.p5 + obj.p6) % 1000000;
+            obj.p4 = (obj.p4 + 1) % 100;
+        } else if (idx === 5) {
+            sum = (sum + obj.p5 + obj.p6 + obj.p7) % 1000000;
+            obj.p5 = (obj.p5 + 1) % 100;
+        } else if (idx === 6) {
+            sum = (sum + obj.p6 + obj.p7 + obj.p0) % 1000000;
+            obj.p6 = (obj.p6 + 1) % 100;
+        } else {
+            sum = (sum + obj.p7 + obj.p0 + obj.p1) % 1000000;
+            obj.p7 = (obj.p7 + 1) % 100;
         }
     }
     return sum;

@@ -122,11 +122,11 @@ Work identically on both zigttp and Deno without modification:
 
 ### Adapted for zigttp (1 benchmark)
 
-- **dynamicProps**: Simplified from 10 to 4 if-else branches
-  - Reason: Long if-else chains combined with performance.now() timing crash after ~100+ calls
-  - Root cause: GC/memory issue in zigttp triggered by many timed benchmark iterations
-  - Performance: ~31M ops/sec (vs 293M ops/sec on Deno)
-  - Status: Workaround in place, needs zigttp fix
+- **dynamicProps**: Reduced from 10 to 8 if-else branches
+  - Reason: Functions with 9+ if-else branches crash when called 150+ times
+  - Root cause: JIT bug in zigttp - exact threshold is 9 branches
+  - Performance: ~22M ops/sec with 8 branches (vs 293M ops/sec on Deno)
+  - Status: Workaround in place (8 branches, 80% of original coverage)
 
 ## Regression Status (Updated 2026-02-04)
 
@@ -137,9 +137,9 @@ Most regressions documented on Feb 1 have been **fixed** by zigttp commit `370ab
 | nestedAccess | Workaround (2 levels) | ✅ Fixed | 10.1M ops/sec (4 levels restored) |
 | queryParsing | Workaround (manual indexOf) | ✅ Fixed | 3.9M ops/sec (native methods) |
 | objectCreate | Workaround | ✅ Fixed | 16.2M ops/sec |
-| dynamicProps | Workaround (4 branches) | ⚠️ Still needed | 31.3M ops/sec (GC bug persists) |
+| dynamicProps | Workaround (4 branches) | ⚠️ Improved to 8 | 22M ops/sec (JIT bug at 9+ branches) |
 
-**Remaining issue**: dynamicProps crashes when benchmark runner calls it 100+ times with timing. This is a GC/memory pressure bug in zigttp that triggers with many performance.now() calls combined with complex control flow
+**Remaining issue**: dynamicProps crashes with 9+ if-else branches when called 150+ times. This is a JIT compilation bug in zigttp. Workaround uses 8 branches (80% coverage of original 10)
 
 ## Baseline Comparison Workflow
 
