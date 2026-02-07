@@ -2,19 +2,42 @@
  * Runtime detection and binary path resolution
  */
 
-import { dirname, fromFileUrl, join } from "https://deno.land/std@0.220.0/path/mod.ts";
+import {
+  dirname,
+  fromFileUrl,
+  join,
+} from "https://deno.land/std@0.220.0/path/mod.ts";
 
 export type Runtime = "deno" | "zigttp";
 
 const libDir = dirname(fromFileUrl(import.meta.url));
 const projectDir = dirname(libDir);
 
-export const ZIGTTP_SERVER_BIN = join(projectDir, "..", "zigttp", "zig-out", "bin", "zigttp-server");
-export const ZIGTTP_BENCH_BIN = join(projectDir, "..", "zigttp", "zig-out", "bin", "zigttp-bench");
+export const ZIGTTP_SERVER_BIN = join(
+  projectDir,
+  "..",
+  "zigttp",
+  "zig-out",
+  "bin",
+  "zigttp-server",
+);
+export const ZIGTTP_BENCH_BIN = join(
+  projectDir,
+  "..",
+  "zigttp",
+  "zig-out",
+  "bin",
+  "zigttp-bench",
+);
 
 export type RuntimeAvailability = {
   deno: { available: true; version: string };
-  zigttp: { available: boolean; version: string | null; serverBin: string; benchBin: string };
+  zigttp: {
+    available: boolean;
+    version: string | null;
+    serverBin: string;
+    benchBin: string;
+  };
 };
 
 /**
@@ -105,7 +128,9 @@ export async function getRuntimeVersions(): Promise<Record<string, string>> {
 /**
  * Get list of runtimes to run based on argument and availability
  */
-export async function getRuntimesToRun(runtimeArg: Runtime | "all"): Promise<Runtime[]> {
+export async function getRuntimesToRun(
+  runtimeArg: Runtime | "all",
+): Promise<Runtime[]> {
   const runtimes = await detectRuntimes();
   const result: Runtime[] = [];
 
@@ -117,7 +142,9 @@ export async function getRuntimesToRun(runtimeArg: Runtime | "all"): Promise<Run
     if (runtimes.zigttp.available) {
       result.push("zigttp");
     } else if (runtimeArg === "zigttp") {
-      console.log("zigttp not built, skipping (run: cd ../zigttp && zig build -Doptimize=ReleaseFast)");
+      console.log(
+        "zigttp not built, skipping (run: cd ../zigttp && zig build -Doptimize=ReleaseFast)",
+      );
     }
   }
 

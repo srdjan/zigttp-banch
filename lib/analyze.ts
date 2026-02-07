@@ -4,7 +4,12 @@
  */
 
 import { join } from "https://deno.land/std@0.220.0/path/mod.ts";
-import { loadResults, loadBaseline, type SystemInfo } from "./results.ts";
+import {
+  getBaselineDir,
+  loadResults,
+  loadResultsWithDiagnostics,
+  type SystemInfo,
+} from "./results.ts";
 import { formatOpsPerSec, type MicrobenchResult } from "./microbench.ts";
 import { type HttpResult } from "./http.ts";
 import { type ColdStartResult } from "./coldstart.ts";
@@ -17,6 +22,11 @@ type ParsedResults = {
   coldstart: ColdStartResult[];
   memory: MemoryResult[];
   microbench: MicrobenchResult[];
+};
+
+type ReportDiagnostics = {
+  invalid_result_files?: string[];
+  invalid_baseline_files?: string[];
 };
 
 /**
@@ -59,14 +69,31 @@ function formatNumber(n: number): string {
  */
 export function generateReport(
   results: ParsedResults,
-  baseline?: ParsedResults
+  baseline?: ParsedResults,
+  diagnostics: ReportDiagnostics = {},
 ): string {
   const lines: string[] = [];
 
   lines.push("# Benchmark Results");
   lines.push("");
-  lines.push(`**Generated:** ${new Date().toISOString().slice(0, 19).replace("T", " ")}`);
+  lines.push(
+    `**Generated:** ${new Date().toISOString().slice(0, 19).replace("T", " ")}`,
+  );
   lines.push("");
+
+  const invalidResults = diagnostics.invalid_result_files ?? [];
+  const invalidBaseline = diagnostics.invalid_baseline_files ?? [];
+  if (invalidResults.length > 0 || invalidBaseline.length > 0) {
+    lines.push("## Data Quality Warnings");
+    lines.push("");
+    for (const filename of invalidResults) {
+      lines.push(`- Ignored invalid results JSON: \`${filename}\``);
+    }
+    for (const filename of invalidBaseline) {
+      lines.push(`- Ignored invalid baseline JSON: \`${filename}\``);
+    }
+    lines.push("");
+  }
 
   // System info
   if (results.system) {
@@ -106,7 +133,11 @@ export function generateReport(
     for (const data of sortedHttp) {
       const rps = data.metrics.requests_per_second;
       const p99 = data.metrics.latency_p99_secs;
-      lines.push(`| ${data.runtime} | ${data.endpoint} | ${formatNumber(Math.round(rps))} | ${p99.toFixed(4)}s |`);
+      lines.push(
+        `| ${data.runtime} | ${data.endpoint} | ${
+          formatNumber(Math.round(rps))
+        } | ${p99.toFixed(4)}s |`,
+      );
     }
     lines.push("");
   }
@@ -124,11 +155,14 @@ export function generateReport(
       }
     }
 
-    const runtimes = results.microbench.map((mb) => mb.runtime).sort();
+    const runtimes = [...new Set(results.microbench.map((mb) => mb.runtime))]
+      .sort();
     const sortedNames = [...benchNames].sort();
 
     if (sortedNames.length > 0 && runtimes.length > 0) {
-      const header = `| Benchmark |${runtimes.map((rt) => ` ${rt} |`).join("")}`;
+      const header = `| Benchmark |${
+        runtimes.map((rt) => ` ${rt} |`).join("")
+      }`;
       lines.push(header);
       lines.push("|" + "---|".repeat(runtimes.length + 1));
 
@@ -163,7 +197,9 @@ export function generateReport(
     for (const data of sortedColdstart) {
       const m = data.metrics;
       lines.push(
-        `| ${data.runtime} | ${formatNumber(m.mean_us)}us | ${formatNumber(m.median_us)}us | ${formatNumber(m.p95_us)}us | ${formatNumber(m.p99_us)}us |`
+        `| ${data.runtime} | ${formatNumber(m.mean_us)}us | ${
+          formatNumber(m.median_us)
+        }us | ${formatNumber(m.p95_us)}us | ${formatNumber(m.p99_us)}us |`,
       );
     }
     lines.push("");
@@ -185,7 +221,9 @@ export function generateReport(
       // Skip if metrics are missing (broken memory profiling)
       if (m.baseline_kb && m.peak_kb) {
         lines.push(
-          `| ${data.runtime} | ${formatNumber(m.baseline_kb)} KB | ${formatNumber(m.peak_kb)} KB | ${formatNumber(m.avg_kb)} KB |`
+          `| ${data.runtime} | ${formatNumber(m.baseline_kb)} KB | ${
+            formatNumber(m.peak_kb)
+          } KB | ${formatNumber(m.avg_kb)} KB |`,
         );
       } else {
         lines.push(`| ${data.runtime} | - | - | - |`);
@@ -204,17 +242,26 @@ export function generateReport(
       lines.push("### HTTP Throughput Ratio");
       lines.push("");
 
+      const baselineHttp = baseline.http.filter((b) => b.runtime === "deno");
       for (const result of results.http) {
         if (result.runtime === "deno") continue;
 
-        const baselineMatch = baseline.http.find(
-          (b) => b.endpoint === result.endpoint
+        const baselineMatch = baselineHttp.find(
+          (b) =>
+            b.endpoint === result.endpoint &&
+            b.connections === result.connections &&
+            b.duration === result.duration,
         );
         if (baselineMatch) {
-          const ratio = result.metrics.requests_per_second / baselineMatch.metrics.requests_per_second;
+          const ratio = result.metrics.requests_per_second /
+            baselineMatch.metrics.requests_per_second;
           const percent = ((ratio - 1) * 100).toFixed(1);
           const sign = ratio >= 1 ? "+" : "";
-          lines.push(`- ${result.endpoint}: ${ratio.toFixed(2)}x (${sign}${percent}%)`);
+          lines.push(
+            `- ${result.runtime} ${result.endpoint} (${result.connections}c, ${result.duration}): ${
+              ratio.toFixed(2)
+            }x (${sign}${percent}%)`,
+          );
         }
       }
       lines.push("");
@@ -223,32 +270,42 @@ export function generateReport(
     // Microbench comparison
     if (results.microbench.length > 0 && baseline.microbench.length > 0) {
       const baselineMb = baseline.microbench.find((m) => m.runtime === "deno");
-      const resultMb = results.microbench.find((m) => m.runtime !== "deno");
+      const comparedRuntimes = results.microbench
+        .filter((m) => m.runtime !== "deno")
+        .sort((a, b) => a.runtime.localeCompare(b.runtime));
 
-      if (baselineMb && resultMb) {
+      if (baselineMb && comparedRuntimes.length > 0) {
         lines.push("### Microbenchmark Ratio");
         lines.push("");
 
-        const names = Object.keys(resultMb.benchmarks).sort();
-        for (const name of names) {
-          const baseOps = baselineMb.benchmarks[name]?.ops_per_sec;
-          const resultOps = resultMb.benchmarks[name]?.ops_per_sec;
+        for (const resultMb of comparedRuntimes) {
+          lines.push(`#### ${resultMb.runtime}`);
+          lines.push("");
+          const names = Object.keys(resultMb.benchmarks).sort();
+          for (const name of names) {
+            const baseOps = baselineMb.benchmarks[name]?.ops_per_sec;
+            const resultOps = resultMb.benchmarks[name]?.ops_per_sec;
 
-          if (baseOps && resultOps) {
-            const ratio = resultOps / baseOps;
-            const percent = ((ratio - 1) * 100).toFixed(1);
-            const sign = ratio >= 1 ? "+" : "";
-            lines.push(`- ${name}: ${ratio.toFixed(2)}x (${sign}${percent}%)`);
+            if (baseOps && resultOps) {
+              const ratio = resultOps / baseOps;
+              const percent = ((ratio - 1) * 100).toFixed(1);
+              const sign = ratio >= 1 ? "+" : "";
+              lines.push(
+                `- ${name}: ${ratio.toFixed(2)}x (${sign}${percent}%)`,
+              );
+            }
           }
+          lines.push("");
         }
-        lines.push("");
       }
     }
   }
 
   lines.push("## Methodology");
   lines.push("");
-  lines.push("See [methodology.md](../methodology.md) for detailed test methodology.");
+  lines.push(
+    "See [methodology.md](../methodology.md) for detailed test methodology.",
+  );
   lines.push("");
 
   return lines.join("\n");
@@ -259,17 +316,29 @@ export function generateReport(
  */
 export async function generateReportFile(
   resultsDir: string,
-  outputPath?: string
+  outputPath?: string,
 ): Promise<void> {
-  const rawResults = await loadResults(resultsDir);
+  const loadedResults = await loadResultsWithDiagnostics(resultsDir);
+  const rawResults = loadedResults.data;
   const results = parseResults(rawResults);
 
   // Try to load baseline for comparison
   const mode = detectMode(resultsDir, rawResults);
-  const rawBaseline = await loadBaseline(mode);
-  const baseline = rawBaseline ? parseResults(rawBaseline) : undefined;
+  const baselineDir = getBaselineDir(mode);
+  let baseline: ParsedResults | undefined;
+  let baselineInvalidJsonFiles: string[] = [];
+  try {
+    const loadedBaseline = await loadResultsWithDiagnostics(baselineDir);
+    baseline = parseResults(loadedBaseline.data);
+    baselineInvalidJsonFiles = loadedBaseline.invalid_json_files;
+  } catch {
+    baseline = undefined;
+  }
 
-  const report = generateReport(results, baseline);
+  const report = generateReport(results, baseline, {
+    invalid_result_files: loadedResults.invalid_json_files,
+    invalid_baseline_files: baselineInvalidJsonFiles,
+  });
 
   const reportPath = outputPath ?? join(resultsDir, "report.md");
   await Deno.writeTextFile(reportPath, report);
@@ -282,7 +351,7 @@ export async function generateReportFile(
  */
 export async function compareResults(
   resultsDir: string,
-  baselineDir: string
+  baselineDir: string,
 ): Promise<string> {
   const rawResults = await loadResults(resultsDir);
   const rawBaseline = await loadResults(baselineDir);

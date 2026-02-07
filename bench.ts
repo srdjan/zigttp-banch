@@ -15,21 +15,51 @@
  *   deno run -A bench.ts report <dir>       # Generate report
  */
 
-import { getRuntimesToRun, detectRuntimes, type Runtime } from "./lib/runtime.ts";
-import { createResultsDir, saveResult, saveSystemInfo, loadResults, getBaselineDir } from "./lib/results.ts";
+import {
+  detectRuntimes,
+  getRuntimesToRun,
+  type Runtime,
+} from "./lib/runtime.ts";
+import {
+  createResultsDir,
+  getBaselineDir,
+  loadResults,
+  saveResult,
+  saveSystemInfo,
+} from "./lib/results.ts";
 import { detectMode } from "./lib/utils.ts";
-import { runAllHttpBenchmarks, type HttpConfig } from "./lib/http.ts";
-import { runAllColdStartBenchmarks, type ColdStartConfig } from "./lib/coldstart.ts";
-import { runAllMemoryProfiles, type MemoryConfig } from "./lib/memory.ts";
-import { runAllMicrobenchmarks, type MicrobenchConfig } from "./lib/microbench.ts";
-import { generateReportFile, compareResults } from "./lib/analyze.ts";
+import {
+  type HttpConfig,
+  type HttpMode,
+  runAllHttpBenchmarks,
+} from "./lib/http.ts";
+import {
+  type ColdStartConfig,
+  runAllColdStartBenchmarks,
+} from "./lib/coldstart.ts";
+import { runAllMemoryProfiles } from "./lib/memory.ts";
+import {
+  type MicrobenchConfig,
+  runAllMicrobenchmarks,
+} from "./lib/microbench.ts";
+import { compareResults, generateReportFile } from "./lib/analyze.ts";
 
-type Command = "http" | "micro" | "cold" | "memory" | "full" | "quick" | "compare" | "report" | "help";
+type Command =
+  | "http"
+  | "micro"
+  | "cold"
+  | "memory"
+  | "full"
+  | "quick"
+  | "compare"
+  | "report"
+  | "help";
 
 type Options = {
   command: Command;
   runtime: Runtime | "all";
   connections?: number;
+  httpMode: HttpMode;
   filter?: string;
   iterations?: number;
   target?: string; // For compare/report commands
@@ -60,29 +90,51 @@ Runtime:
 
 Options:
   --connections=N      Number of connections for HTTP benchmarks (default: 10)
+  --http-mode=MODE     HTTP benchmark mode: parity|implementation (default: parity)
   --filter=name1,name2 Filter microbenchmarks by name
   --iterations=N       Number of iterations for cold start (default: 100)
 
 Examples:
   deno run -A bench.ts quick zigttp
-  deno run -A bench.ts http deno --connections=20
+  deno run -A bench.ts http deno --connections=20 --http-mode=parity
   deno run -A bench.ts micro zigttp --filter=arithmetic,stringOps
   deno run -A bench.ts compare results/20260126_123456_1234_5678
   deno run -A bench.ts report results/20260126_123456_1234_5678
 `);
 }
 
+function parsePositiveInt(name: string, raw: string): number {
+  const value = parseInt(raw, 10);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`Invalid ${name}: ${raw} (must be a positive integer)`);
+  }
+  return value;
+}
+
 function parseArgs(args: string[]): Options {
   const options: Options = {
     command: "help",
     runtime: "all",
+    httpMode: "parity",
   };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
 
     // Commands
-    if (["http", "micro", "cold", "memory", "full", "quick", "compare", "report", "help"].includes(arg)) {
+    if (
+      [
+        "http",
+        "micro",
+        "cold",
+        "memory",
+        "full",
+        "quick",
+        "compare",
+        "report",
+        "help",
+      ].includes(arg)
+    ) {
       options.command = arg as Command;
       continue;
     }
@@ -95,7 +147,19 @@ function parseArgs(args: string[]): Options {
 
     // Options
     if (arg.startsWith("--connections=")) {
-      options.connections = parseInt(arg.split("=")[1], 10);
+      const value = arg.split("=")[1];
+      options.connections = parsePositiveInt("connections", value);
+      continue;
+    }
+
+    if (arg.startsWith("--http-mode=")) {
+      const mode = arg.split("=")[1];
+      if (mode !== "parity" && mode !== "implementation") {
+        throw new Error(
+          `Invalid --http-mode: ${mode} (expected parity|implementation)`,
+        );
+      }
+      options.httpMode = mode;
       continue;
     }
 
@@ -105,32 +169,49 @@ function parseArgs(args: string[]): Options {
     }
 
     if (arg.startsWith("--iterations=")) {
-      options.iterations = parseInt(arg.split("=")[1], 10);
+      const value = arg.split("=")[1];
+      options.iterations = parsePositiveInt("iterations", value);
       continue;
+    }
+
+    if (arg.startsWith("--")) {
+      throw new Error(`Unknown option: ${arg}`);
     }
 
     // Target directory for compare/report
     if (!arg.startsWith("--") && !options.target) {
       if (options.command === "compare" || options.command === "report") {
         options.target = arg;
+        continue;
       }
     }
+
+    throw new Error(`Unexpected argument: ${arg}`);
   }
 
   return options;
 }
 
-async function runHttp(runtimes: Runtime[], resultsDir: string, options: Options): Promise<void> {
+async function runHttp(
+  runtimes: Runtime[],
+  resultsDir: string,
+  options: Options,
+): Promise<void> {
   const config: Partial<HttpConfig> = {};
 
   if (options.connections) {
     config.connections = options.connections;
   }
+  config.mode = options.httpMode;
 
   await runAllHttpBenchmarks(runtimes, resultsDir, config);
 }
 
-async function runMicro(runtimes: Runtime[], resultsDir: string, options: Options): Promise<void> {
+async function runMicro(
+  runtimes: Runtime[],
+  resultsDir: string,
+  options: Options,
+): Promise<void> {
   const config: MicrobenchConfig = {};
 
   if (options.filter) {
@@ -140,7 +221,11 @@ async function runMicro(runtimes: Runtime[], resultsDir: string, options: Option
   await runAllMicrobenchmarks(runtimes, resultsDir, config);
 }
 
-async function runCold(runtimes: Runtime[], resultsDir: string, options: Options): Promise<void> {
+async function runCold(
+  runtimes: Runtime[],
+  resultsDir: string,
+  options: Options,
+): Promise<void> {
   const config: Partial<ColdStartConfig> = {};
 
   if (options.iterations) {
@@ -150,11 +235,19 @@ async function runCold(runtimes: Runtime[], resultsDir: string, options: Options
   await runAllColdStartBenchmarks(runtimes, resultsDir, config);
 }
 
-async function runMemory(runtimes: Runtime[], resultsDir: string, _options: Options): Promise<void> {
+async function runMemory(
+  runtimes: Runtime[],
+  resultsDir: string,
+  _options: Options,
+): Promise<void> {
   await runAllMemoryProfiles(runtimes, resultsDir);
 }
 
-async function runFull(runtimes: Runtime[], resultsDir: string, options: Options): Promise<void> {
+async function runFull(
+  runtimes: Runtime[],
+  resultsDir: string,
+  options: Options,
+): Promise<void> {
   await runHttp(runtimes, resultsDir, options);
   console.log("");
 
@@ -167,7 +260,11 @@ async function runFull(runtimes: Runtime[], resultsDir: string, options: Options
   await runMemory(runtimes, resultsDir, options);
 }
 
-async function runQuick(runtimes: Runtime[], resultsDir: string, options: Options): Promise<void> {
+async function runQuick(
+  runtimes: Runtime[],
+  resultsDir: string,
+  options: Options,
+): Promise<void> {
   console.log("Quick validation mode: reduced duration and iterations");
   console.log("");
 
@@ -176,6 +273,7 @@ async function runQuick(runtimes: Runtime[], resultsDir: string, options: Option
     connections: 1,
     duration: "5s",
     warmupRequests: 100,
+    mode: options.httpMode,
   };
   await runAllHttpBenchmarks(runtimes, resultsDir, httpConfig);
   console.log("");
@@ -233,7 +331,18 @@ async function runReport(options: Options): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const options = parseArgs(Deno.args);
+  let options: Options;
+  try {
+    options = parseArgs(Deno.args);
+  } catch (e) {
+    console.error(
+      "Argument error:",
+      e instanceof Error ? e.message : String(e),
+    );
+    console.error("");
+    printUsage();
+    Deno.exit(1);
+  }
 
   if (options.command === "help" || Deno.args.length === 0) {
     printUsage();

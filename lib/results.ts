@@ -3,7 +3,7 @@
  */
 
 import { join } from "https://deno.land/std@0.220.0/path/mod.ts";
-import { projectDir, getRuntimeVersions } from "./runtime.ts";
+import { getRuntimeVersions, projectDir } from "./runtime.ts";
 import { isoTimestamp } from "./utils.ts";
 
 const resultsBase = join(projectDir, "results");
@@ -18,6 +18,11 @@ export type SystemInfo = {
   cpu_cores: number;
   ram_gb: number;
   runtimes: Record<string, string>;
+};
+
+export type LoadedResults = {
+  data: Record<string, unknown>;
+  invalid_json_files: string[];
 };
 
 /**
@@ -52,7 +57,10 @@ async function getMacOSInfo(): Promise<{ cpu_model: string; ram_gb: number }> {
       stdout: "piped",
     });
     const memResult = await memCmd.output();
-    const memBytes = parseInt(new TextDecoder().decode(memResult.stdout).trim(), 10);
+    const memBytes = parseInt(
+      new TextDecoder().decode(memResult.stdout).trim(),
+      10,
+    );
     const ramGb = Math.round(memBytes / (1024 * 1024 * 1024));
 
     return { cpu_model: cpuModel || "unknown", ram_gb: ramGb || 0 };
@@ -99,8 +107,9 @@ async function collectSystemInfo(): Promise<SystemInfo> {
   }
 
   // Get CPU and RAM info
-  const { cpu_model, ram_gb } =
-    Deno.build.os === "darwin" ? await getMacOSInfo() : await getLinuxInfo();
+  const { cpu_model, ram_gb } = Deno.build.os === "darwin"
+    ? await getMacOSInfo()
+    : await getLinuxInfo();
 
   // Get CPU cores
   const cpuCores = navigator?.hardwareConcurrency ?? 0;
@@ -136,7 +145,7 @@ export async function saveSystemInfo(resultsDir: string): Promise<SystemInfo> {
 export async function saveResult(
   resultsDir: string,
   filename: string,
-  data: unknown
+  data: unknown,
 ): Promise<void> {
   const path = join(resultsDir, filename);
   await Deno.writeTextFile(path, JSON.stringify(data, null, 2));
@@ -146,9 +155,20 @@ export async function saveResult(
  * Load all JSON results from a directory
  */
 export async function loadResults(
-  resultsDir: string
+  resultsDir: string,
 ): Promise<Record<string, unknown>> {
+  const loaded = await loadResultsWithDiagnostics(resultsDir);
+  return loaded.data;
+}
+
+/**
+ * Load all JSON results from a directory with parse diagnostics
+ */
+export async function loadResultsWithDiagnostics(
+  resultsDir: string,
+): Promise<LoadedResults> {
   const results: Record<string, unknown> = {};
+  const invalidJsonFiles: string[] = [];
 
   for await (const entry of Deno.readDir(resultsDir)) {
     if (entry.isFile && entry.name.endsWith(".json")) {
@@ -157,12 +177,13 @@ export async function loadResults(
       try {
         results[entry.name] = JSON.parse(content);
       } catch {
-        // Silently skip invalid JSON files (e.g., broken baseline files)
+        invalidJsonFiles.push(entry.name);
       }
     }
   }
 
-  return results;
+  invalidJsonFiles.sort();
+  return { data: results, invalid_json_files: invalidJsonFiles };
 }
 
 /**
@@ -176,7 +197,7 @@ export function getBaselineDir(mode: "quick" | "full"): string {
  * Load baseline results for comparison
  */
 export async function loadBaseline(
-  mode: "quick" | "full"
+  mode: "quick" | "full",
 ): Promise<Record<string, unknown> | null> {
   const baselineDir = getBaselineDir(mode);
 

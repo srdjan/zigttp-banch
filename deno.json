@@ -1,0 +1,40 @@
+{
+  "fmt": {
+    "include": [
+      "bench.ts",
+      "lib/",
+      "README.md",
+      "methodology.md",
+      "deno.json"
+    ],
+    "exclude": [
+      "results/",
+      "baselines/",
+      "tools/",
+      "zigttp-benchmarks/"
+    ]
+  },
+  "lint": {
+    "include": [
+      "bench.ts",
+      "lib/"
+    ],
+    "exclude": [
+      "results/",
+      "baselines/",
+      "tools/",
+      "zigttp-benchmarks/"
+    ],
+    "rules": {
+      "exclude": [
+        "no-import-prefix"
+      ]
+    }
+  },
+  "tasks": {
+    "check": "deno check bench.ts",
+    "lint": "deno lint",
+    "fmt:check": "deno fmt --check",
+    "verify": "deno task fmt:check && deno task lint && deno task check"
+  }
+}

@@ -3,8 +3,8 @@
  */
 
 import { join } from "https://deno.land/std@0.220.0/path/mod.ts";
-import { type Runtime, ZIGTTP_SERVER_BIN, projectDir } from "./runtime.ts";
-import { waitForServer, waitForPortFree } from "./ports.ts";
+import { projectDir, type Runtime, ZIGTTP_SERVER_BIN } from "./runtime.ts";
+import { waitForPortFree, waitForServer } from "./ports.ts";
 
 export type ServerHandle = {
   process: Deno.ChildProcess;
@@ -15,6 +15,60 @@ export type ServerHandle = {
 
 // Global registry of active servers for cleanup
 const activeServers = new Set<ServerHandle>();
+
+async function captureStream(
+  stream: ReadableStream<Uint8Array> | null,
+  maxBytes: number = 8192,
+): Promise<string> {
+  if (!stream) return "";
+
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      chunks.push(value);
+      total += value.length;
+      while (total > maxBytes && chunks.length > 0) {
+        const removed = chunks.shift();
+        total -= removed?.length ?? 0;
+      }
+    }
+  } catch {
+    // Ignore stream read failures; this is best-effort diagnostics.
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // Ignore release failures
+    }
+  }
+
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return new TextDecoder().decode(merged).trim();
+}
+
+function formatStartupErrorDetails(stdout: string, stderr: string): string {
+  if (!stdout && !stderr) return "";
+
+  const parts: string[] = [];
+  if (stderr) {
+    parts.push(`stderr:\n${stderr}`);
+  }
+  if (stdout) {
+    parts.push(`stdout:\n${stdout}`);
+  }
+  return `\n\nProcess output:\n${parts.join("\n\n")}`;
+}
 
 // Register cleanup handler for unexpected exits
 const cleanupHandler = () => {
@@ -36,7 +90,7 @@ globalThis.addEventListener("unload", cleanupHandler);
 export async function startServer(
   runtime: Runtime,
   port: number,
-  handlerPath?: string
+  handlerPath?: string,
 ): Promise<ServerHandle> {
   const defaultHandler = runtime === "deno"
     ? join(projectDir, "handlers", "deno", "server.ts")
@@ -62,6 +116,8 @@ export async function startServer(
   }
 
   const process = cmd.spawn();
+  const stdoutCapture = captureStream(process.stdout);
+  const stderrCapture = captureStream(process.stderr);
   const pid = process.pid;
 
   const handle: ServerHandle = { process, pid, port, runtime };
@@ -74,7 +130,11 @@ export async function startServer(
   const ready = await waitForServer(port, "/api/health", 5000);
   if (!ready) {
     await stopServer(handle);
-    throw new Error(`${runtime} server failed to start on port ${port}`);
+    const [stdout, stderr] = await Promise.all([stdoutCapture, stderrCapture]);
+    const details = formatStartupErrorDetails(stdout, stderr);
+    throw new Error(
+      `${runtime} server failed to start on port ${port}${details}`,
+    );
   }
 
   return handle;
@@ -126,4 +186,3 @@ export async function stopServer(handle: ServerHandle): Promise<void> {
 
   await waitForPortFree(handle.port, 1000);
 }
-

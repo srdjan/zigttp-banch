@@ -4,10 +4,15 @@
  */
 
 import { join } from "https://deno.land/std@0.220.0/path/mod.ts";
-import { type Runtime, ZIGTTP_SERVER_BIN, projectDir } from "./runtime.ts";
-import { ensurePortFree, getDefaultPort, isPortFree, waitForServer } from "./ports.ts";
+import { projectDir, type Runtime, ZIGTTP_SERVER_BIN } from "./runtime.ts";
+import {
+  ensurePortFree,
+  getDefaultPort,
+  isPortFree,
+  waitForServer,
+} from "./ports.ts";
 import { saveResult } from "./results.ts";
-import { sleep, computeStats, isoTimestamp } from "./utils.ts";
+import { computeStats, isoTimestamp, sleep } from "./utils.ts";
 
 export type ColdStartConfig = {
   iterations: number;
@@ -42,7 +47,7 @@ const DEFAULT_CONFIG: ColdStartConfig = {
 async function measureColdStart(
   runtime: Runtime,
   port: number,
-  handlerPath: string
+  handlerPath: string,
 ): Promise<number> {
   const startUs = performance.now() * 1000;
 
@@ -72,8 +77,8 @@ async function measureColdStart(
 
   const process = cmd.spawn();
 
-  // Wait for first successful response
-  const ready = await waitForServer(port, "/api/health", 10000);
+  // Wait for first successful response (2ms polling for cold start precision)
+  const ready = await waitForServer(port, "/api/health", 10000, 2);
   const endUs = performance.now() * 1000;
 
   // Kill the process
@@ -104,7 +109,7 @@ async function measureColdStart(
 export async function runColdStartBenchmarks(
   runtime: Runtime,
   resultsDir: string,
-  config: Partial<ColdStartConfig> = {}
+  config: Partial<ColdStartConfig> = {},
 ): Promise<ColdStartResult | null> {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
   const iterations = fullConfig.iterations;
@@ -152,7 +157,9 @@ export async function runColdStartBenchmarks(
     samples: samples.length,
   };
 
-  console.log(`  Results: mean=${stats.mean}us, median=${stats.median}us, p99=${stats.p99}us`);
+  console.log(
+    `  Results: mean=${stats.mean}us, median=${stats.median}us, p99=${stats.p99}us`,
+  );
   console.log("");
 
   const result: ColdStartResult = {
@@ -176,7 +183,7 @@ export async function runColdStartBenchmarks(
 export async function runAllColdStartBenchmarks(
   runtimes: Runtime[],
   resultsDir: string,
-  config: Partial<ColdStartConfig> = {}
+  config: Partial<ColdStartConfig> = {},
 ): Promise<Map<Runtime, ColdStartResult | null>> {
   const results = new Map<Runtime, ColdStartResult | null>();
 

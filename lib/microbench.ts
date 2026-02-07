@@ -4,7 +4,7 @@
  */
 
 import { join } from "https://deno.land/std@0.220.0/path/mod.ts";
-import { type Runtime, ZIGTTP_BENCH_BIN, projectDir } from "./runtime.ts";
+import { projectDir, type Runtime, ZIGTTP_BENCH_BIN } from "./runtime.ts";
 import { saveResult } from "./results.ts";
 
 const microbenchDir = join(projectDir, "microbench");
@@ -47,7 +47,10 @@ export type MicrobenchResult = {
 /**
  * Build the concatenated suite script from runner.js + benchmarks/*.js + suite.js
  */
-async function buildSuiteScript(config: MicrobenchConfig, runtime: Runtime): Promise<string> {
+async function buildSuiteScript(
+  config: MicrobenchConfig,
+  runtime: Runtime,
+): Promise<string> {
   const files: string[] = [join(microbenchDir, "runner.js")];
 
   // Add all benchmark files sorted alphabetically
@@ -72,7 +75,8 @@ async function buildSuiteScript(config: MicrobenchConfig, runtime: Runtime): Pro
   }
 
   if (config.httpHandlerHeavyIterations !== undefined) {
-    script += `let __httpHandlerHeavyIterations = ${config.httpHandlerHeavyIterations};\n`;
+    script +=
+      `let __httpHandlerHeavyIterations = ${config.httpHandlerHeavyIterations};\n`;
   }
 
   const benchConfigParts: string[] = [];
@@ -95,7 +99,7 @@ async function buildSuiteScript(config: MicrobenchConfig, runtime: Runtime): Pro
     if (runtime === "zigttp" && file.endsWith("runner.js")) {
       content = content.replace(
         /\/\/ range\(\) polyfill for Deno[\s\S]*?\/\/ end range\(\) polyfill/,
-        "// range() polyfill removed for zigttp (builtin provided)"
+        "// range() polyfill removed for zigttp (builtin provided)",
       );
     }
 
@@ -110,7 +114,7 @@ async function buildSuiteScript(config: MicrobenchConfig, runtime: Runtime): Pro
  */
 async function runDenoMicrobench(
   suiteScript: string,
-  resultsDir: string
+  resultsDir: string,
 ): Promise<MicrobenchResult | null> {
   console.log("=== Microbenchmarks: deno ===");
 
@@ -144,7 +148,9 @@ async function runDenoMicrobench(
     // Print summary
     for (const [name, data] of Object.entries(benchmarks)) {
       const opsPerSec = data.ops_per_sec ?? 0;
-      console.log(`  ${name}: ${Math.floor(opsPerSec).toLocaleString()} ops/sec`);
+      console.log(
+        `  ${name}: ${Math.floor(opsPerSec).toLocaleString()} ops/sec`,
+      );
     }
 
     const result: MicrobenchResult = {
@@ -166,11 +172,52 @@ async function runDenoMicrobench(
 
 // All benchmark names in suite order
 const ALL_BENCHMARK_NAMES = [
-  "arithmetic", "stringOps", "objectCreate", "propertyAccess", "functionCalls",
-  "jsonOps", "httpHandler", "httpHandlerHeavy", "stringBuild", "dynamicProps",
-  "arrayOps", "nestedAccess", "queryParsing", "parseInt", "mathOps", "monoProperty",
+  "arithmetic",
+  "stringOps",
+  "objectCreate",
+  "propertyAccess",
+  "functionCalls",
+  "jsonOps",
+  "httpHandler",
+  "httpHandlerHeavy",
+  "stringBuild",
+  "dynamicProps",
+  "arrayOps",
+  "nestedAccess",
+  "queryParsing",
+  "parseInt",
+  "mathOps",
+  "monoProperty",
   "monoPropertyWrite",
 ];
+
+function parseFilter(filter?: string): string[] {
+  if (!filter) return [];
+  const seen = new Set<string>();
+  const parsed: string[] = [];
+  for (const token of filter.split(",")) {
+    const name = token.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    parsed.push(name);
+  }
+  return parsed;
+}
+
+function validateFilter(filter?: string): string {
+  const names = parseFilter(filter);
+  if (names.length === 0) return "";
+
+  const known = new Set(ALL_BENCHMARK_NAMES);
+  const unknown = names.filter((name) => !known.has(name));
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unknown microbenchmark filter name(s): ${unknown.join(", ")}. ` +
+        `Known names: ${ALL_BENCHMARK_NAMES.join(", ")}`,
+    );
+  }
+  return names.join(",");
+}
 
 // zigttp segfaults when running 9+ benchmarks in one process (GC/heap pressure).
 // Split into groups of this size to work around the issue.
@@ -185,7 +232,10 @@ async function runZigttpGroup(
   resultsDir: string,
 ): Promise<Record<string, BenchmarkData> | null> {
   const suiteScript = await buildSuiteScript({ ...config, filter }, "zigttp");
-  const suitePath = join(resultsDir, `microbench_suite_${filter.split(",")[0]}.js`);
+  const suitePath = join(
+    resultsDir,
+    `microbench_suite_${filter.split(",")[0]}.js`,
+  );
   await Deno.writeTextFile(suitePath, suiteScript);
 
   const cmd = new Deno.Command(ZIGTTP_BENCH_BIN, {
@@ -228,14 +278,17 @@ async function runZigttpMicrobench(
   try {
     await Deno.stat(ZIGTTP_BENCH_BIN);
   } catch {
-    console.log("  zigttp-bench not built, skipping (run: cd ../zigttp && zig build bench)");
+    console.log(
+      "  zigttp-bench not built, skipping (run: cd ../zigttp && zig build bench)",
+    );
     console.log("");
     return null;
   }
 
   // Determine which benchmarks to run
+  const parsedFilter = parseFilter(config.filter);
   const names = config.filter
-    ? ALL_BENCHMARK_NAMES.filter(n => config.filter!.split(",").includes(n))
+    ? ALL_BENCHMARK_NAMES.filter((n) => parsedFilter.includes(n))
     : [...ALL_BENCHMARK_NAMES];
 
   // Split into groups
@@ -280,7 +333,10 @@ async function runZigttpMicrobench(
 
   // Save the combined suite for reference
   const fullSuiteScript = await buildSuiteScript(config, "zigttp");
-  await Deno.writeTextFile(join(resultsDir, "microbench_suite.js"), fullSuiteScript);
+  await Deno.writeTextFile(
+    join(resultsDir, "microbench_suite.js"),
+    fullSuiteScript,
+  );
   await saveResult(resultsDir, "microbench_zigttp.json", result);
   console.log("");
   return result;
@@ -292,25 +348,30 @@ async function runZigttpMicrobench(
 export async function runAllMicrobenchmarks(
   runtimes: Runtime[],
   resultsDir: string,
-  config: MicrobenchConfig = {}
+  config: MicrobenchConfig = {},
 ): Promise<Map<Runtime, MicrobenchResult | null>> {
+  const normalizedFilter = validateFilter(config.filter);
+  const fullConfig = {
+    ...config,
+    filter: normalizedFilter || undefined,
+  };
   const results = new Map<Runtime, MicrobenchResult | null>();
 
   console.log("Microbenchmark Suite");
   console.log(`Results: ${resultsDir}`);
-  if (config.filter) {
-    console.log(`Filter: ${config.filter}`);
+  if (fullConfig.filter) {
+    console.log(`Filter: ${fullConfig.filter}`);
   }
   console.log("");
 
   for (const runtime of runtimes) {
     let result: MicrobenchResult | null;
     if (runtime === "deno") {
-      const suiteScript = await buildSuiteScript(config, runtime);
+      const suiteScript = await buildSuiteScript(fullConfig, runtime);
       result = await runDenoMicrobench(suiteScript, resultsDir);
     } else {
       // zigttp builds its own suite scripts per group internally
-      result = await runZigttpMicrobench(resultsDir, config);
+      result = await runZigttpMicrobench(resultsDir, fullConfig);
     }
     results.set(runtime, result);
   }

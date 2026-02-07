@@ -4,9 +4,9 @@
 
 import { type Runtime } from "./runtime.ts";
 import { ensurePortFree, getDefaultPort } from "./ports.ts";
-import { startServer, stopServer, type ServerHandle } from "./server.ts";
+import { type ServerHandle, startServer, stopServer } from "./server.ts";
 import { saveResult } from "./results.ts";
-import { sleep, isoTimestamp } from "./utils.ts";
+import { isoTimestamp, sleep } from "./utils.ts";
 
 export type EndpointConfig = {
   path: string;
@@ -15,7 +15,10 @@ export type EndpointConfig = {
   headers?: Record<string, string>;
 };
 
+export type HttpMode = "parity" | "implementation";
+
 export type HttpConfig = {
+  mode: HttpMode;
   connections: number;
   duration: string;
   warmupRequests: number;
@@ -44,17 +47,49 @@ export type HttpResult = {
 };
 
 const DEFAULT_CONFIG: HttpConfig = {
+  mode: "parity",
   connections: 10,
   duration: "30s",
   warmupRequests: 1000,
-  endpoints: [
-    "/api/health",
-    "/api/echo",
-    "/api/greet/world",
-    "/api/process?items=500&page=3&limit=25",
-  ],
+  endpoints: [],
   cooldownSecs: 2,
 };
+
+const PARITY_ENDPOINTS: (string | EndpointConfig)[] = [
+  "/api/health",
+  "/api/greet/world",
+  "/api/compute",
+];
+
+const IMPLEMENTATION_ENDPOINTS: (string | EndpointConfig)[] = [
+  "/api/health",
+  "/api/echo",
+  "/api/greet/world",
+  "/api/process?items=500&page=3&limit=25",
+];
+
+function cloneEndpoint(
+  endpoint: string | EndpointConfig,
+): string | EndpointConfig {
+  if (typeof endpoint === "string") return endpoint;
+  return {
+    ...endpoint,
+    headers: endpoint.headers ? { ...endpoint.headers } : undefined,
+  };
+}
+
+function resolveHttpConfig(config: Partial<HttpConfig>): HttpConfig {
+  const mode = config.mode ?? DEFAULT_CONFIG.mode;
+  const endpoints = config.endpoints ??
+    (mode === "parity" ? PARITY_ENDPOINTS : IMPLEMENTATION_ENDPOINTS);
+
+  return {
+    ...DEFAULT_CONFIG,
+    ...config,
+    mode,
+    endpoints: endpoints.map(cloneEndpoint),
+  };
+}
 
 /**
  * Parse hey CLI output to extract metrics
@@ -67,7 +102,9 @@ function parseHeyOutput(output: string): HttpMetrics {
   const p99Match = output.match(/99%\s+in\s+([\d.]+)/);
 
   // Count non-200 responses in status code distribution
-  const statusSection = output.match(/Status code distribution:([\s\S]*?)(?:\n\n|$)/);
+  const statusSection = output.match(
+    /Status code distribution:([\s\S]*?)(?:\n\n|$)/,
+  );
   let errors = 0;
   if (statusSection) {
     const lines = statusSection[1].split("\n");
@@ -96,7 +133,11 @@ async function runHey(
   url: string,
   connections: number,
   duration: string,
-  options?: { method?: string; body?: string; headers?: Record<string, string> }
+  options?: {
+    method?: string;
+    body?: string;
+    headers?: Record<string, string>;
+  },
 ): Promise<{ output: string; success: boolean }> {
   const args = ["-c", String(connections), "-z", duration];
 
@@ -155,7 +196,11 @@ async function runHey(
 async function warmup(
   url: string,
   requests: number,
-  options?: { method?: string; body?: string; headers?: Record<string, string> }
+  options?: {
+    method?: string;
+    body?: string;
+    headers?: Record<string, string>;
+  },
 ): Promise<void> {
   const args = ["-n", String(requests), "-c", "10"];
 
@@ -212,7 +257,7 @@ async function benchmarkEndpoint(
   runtime: string,
   endpointConfig: string | EndpointConfig,
   config: HttpConfig,
-  resultsDir: string
+  resultsDir: string,
 ): Promise<HttpResult> {
   // Normalize endpoint config
   const normalized: EndpointConfig = typeof endpointConfig === "string"
@@ -223,7 +268,9 @@ async function benchmarkEndpoint(
   const method = normalized.method || "GET";
   const displayEndpoint = `${method} ${normalized.path}`;
 
-  console.log(`  Endpoint: ${displayEndpoint} (${config.connections} connections)`);
+  console.log(
+    `  Endpoint: ${displayEndpoint} (${config.connections} connections)`,
+  );
 
   const options = {
     method: normalized.method,
@@ -235,7 +282,12 @@ async function benchmarkEndpoint(
   await warmup(url, config.warmupRequests, options);
 
   // Measured run
-  const { output, success } = await runHey(url, config.connections, config.duration, options);
+  const { output, success } = await runHey(
+    url,
+    config.connections,
+    config.duration,
+    options,
+  );
 
   const metrics = success ? parseHeyOutput(output) : {
     requests_per_second: 0,
@@ -246,7 +298,11 @@ async function benchmarkEndpoint(
     errors: 0,
   };
 
-  console.log(`    RPS: ${metrics.requests_per_second.toFixed(0)}, p99: ${metrics.latency_p99_secs}s`);
+  console.log(
+    `    RPS: ${
+      metrics.requests_per_second.toFixed(0)
+    }, p99: ${metrics.latency_p99_secs}s`,
+  );
 
   const result: HttpResult = {
     type: "http_benchmark",
@@ -261,7 +317,8 @@ async function benchmarkEndpoint(
 
   // Save result
   const safeEndpoint = displayEndpoint.replace(/[\/\s]/g, "_");
-  const filename = `http_${runtime}_${safeEndpoint}_${config.connections}c.json`;
+  const filename =
+    `http_${runtime}_${safeEndpoint}_${config.connections}c.json`;
   await saveResult(resultsDir, filename, result);
 
   return result;
@@ -273,9 +330,9 @@ async function benchmarkEndpoint(
 export async function runHttpBenchmarks(
   runtime: Runtime,
   resultsDir: string,
-  config: Partial<HttpConfig> = {}
+  config: Partial<HttpConfig> = {},
 ): Promise<HttpResult[]> {
-  const fullConfig = { ...DEFAULT_CONFIG, ...config };
+  const fullConfig = resolveHttpConfig(config);
 
   console.log(`=== Benchmarking ${runtime} ===`);
 
@@ -301,7 +358,7 @@ export async function runHttpBenchmarks(
         runtime,
         endpoint,
         fullConfig,
-        resultsDir
+        resultsDir,
       );
       results.push(result);
     }
@@ -319,13 +376,14 @@ export async function runHttpBenchmarks(
 export async function runAllHttpBenchmarks(
   runtimes: Runtime[],
   resultsDir: string,
-  config: Partial<HttpConfig> = {}
+  config: Partial<HttpConfig> = {},
 ): Promise<Map<Runtime, HttpResult[]>> {
-  const fullConfig = { ...DEFAULT_CONFIG, ...config };
+  const fullConfig = resolveHttpConfig(config);
   const allResults = new Map<Runtime, HttpResult[]>();
 
   console.log("HTTP Benchmark Suite");
   console.log(`Results: ${resultsDir}`);
+  console.log(`Mode: ${fullConfig.mode}`);
   console.log(`Connections: ${fullConfig.connections}`);
   console.log("");
 
@@ -336,7 +394,9 @@ export async function runAllHttpBenchmarks(
 
     // Cooldown between runtimes (not after the last one)
     if (i < runtimes.length - 1) {
-      console.log(`Cooldown: ${fullConfig.cooldownSecs}s before next runtime...`);
+      console.log(
+        `Cooldown: ${fullConfig.cooldownSecs}s before next runtime...`,
+      );
       await sleep(fullConfig.cooldownSecs * 1000);
     }
   }

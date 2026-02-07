@@ -1,6 +1,7 @@
 # zigttp Benchmark Suite
 
-Comprehensive performance comparison of [zigttp](https://github.com/srdjan/zigttp) against Deno.
+Comprehensive performance comparison of
+[zigttp](https://github.com/srdjan/zigttp) against Deno.
 
 ## Quick Start
 
@@ -18,7 +19,9 @@ deno run -A bench.ts cold     # Cold start times
 deno run -A bench.ts memory   # Memory profiling
 ```
 
-Runtime argument is optional: `deno`, `zigttp`, or `all` (default).
+Runtime argument is optional: `deno`, `zigttp`, or `all` (default). HTTP
+benchmarks also support mode selection: `--http-mode=parity|implementation`
+(default: `parity`).
 
 ## Running Benchmarks
 
@@ -28,7 +31,7 @@ deno run -A bench.ts micro deno
 deno run -A bench.ts http zigttp
 
 # With options
-deno run -A bench.ts http zigttp --connections=20
+deno run -A bench.ts http zigttp --connections=20 --http-mode=parity
 deno run -A bench.ts micro zigttp --filter=arithmetic,stringOps
 deno run -A bench.ts cold zigttp --iterations=50
 
@@ -39,11 +42,13 @@ deno run -A bench.ts compare results/<timestamp>
 
 ### Historical runs
 
-Every run is stored under `results/<timestamp>_<pid>_<rand>/` and never overwrites previous output.
+Every run is stored under `results/<timestamp>_<pid>_<rand>/` and never
+overwrites previous output.
 
 ### Flamegraph (zigttp)
 
-Generate a flamegraph for the zigttp microbench (defaults to `httpHandlerHeavy`):
+Generate a flamegraph for the zigttp microbench (defaults to
+`httpHandlerHeavy`):
 
 ```bash
 ./scripts/run_flamegraph.sh
@@ -58,13 +63,15 @@ The SVG is saved under `results/<timestamp>/flamegraph.svg`.
 
 ## Cold Start Optimization
 
-zigttp cold starts can be reduced by 16% (83ms to 71ms) using embedded bytecode precompilation:
+zigttp cold starts can be reduced by 16% (83ms to 71ms) using embedded bytecode
+precompilation:
 
 ```bash
 ./scripts/build_optimized.sh
 ```
 
-See `results/optimization_results.md` and `results/coldstart_analysis.md` for detailed analysis and profiling data.
+See `results/optimization_results.md` and `results/coldstart_analysis.md` for
+detailed analysis and profiling data.
 
 ## Prerequisites
 
@@ -73,6 +80,7 @@ See `results/optimization_results.md` and `results/coldstart_analysis.md` for de
 - zigttp built with release optimizations
 
 Build zigttp:
+
 ```bash
 # Baseline build (runtime handler loading)
 ./scripts/build_baseline.sh
@@ -110,32 +118,42 @@ Build zigttp:
 ## Benchmark Categories
 
 ### HTTP Throughput
+
 Measures requests/second and latency percentiles for standard endpoints:
+
 - `/api/health` - Health check (minimal response)
-- `/api/echo` - Echo request details
 - `/api/greet/:name` - Path parameter handling
+- `/api/compute` - CPU-bound handler
 
 ### JavaScript Execution Speed
-15 microbenchmarks testing core JS performance:
+
+17 microbenchmarks testing core JS performance:
+
 - arithmetic, stringOps, objectCreate, propertyAccess, functionCalls
 - jsonOps, httpHandler, httpHandlerHeavy, stringBuild, dynamicProps
-- arrayOps, nestedAccess, queryParsing, parseInt, mathOps
+- arrayOps, nestedAccess, queryParsing, parseInt, mathOps, monoProperty,
+  monoPropertyWrite
 
 ### Cold Start
+
 Time from process spawn to first successful HTTP response.
+
 - Default: 100 iterations per runtime for statistical significance
 - Baseline zigttp: ~83ms (runtime handler parsing)
 - Optimized zigttp: ~71ms (embedded bytecode, 16% faster)
 - Profiling: `./scripts/profile_coldstart.sh`
-- Analysis: `./scripts/analyze_coldstart.sh` (add `--embedded` for bytecode build)
+- Analysis: `./scripts/analyze_coldstart.sh` (add `--embedded` for bytecode
+  build)
 
 ### Memory Usage
+
 - Baseline RSS after startup
 - Peak and average RSS under load
 
 ## Output
 
 Results are saved to `results/<timestamp>/` with:
+
 - `system_info.json` - Test environment details
 - `http_*.json` - HTTP benchmark results
 - `microbench_*.json` - JS execution results
@@ -147,4 +165,5 @@ Each run gets a unique results folder to preserve historical trends.
 
 ## Methodology
 
-See [methodology.md](methodology.md) for test protocols, warmup procedures, and statistical methods.
+See [methodology.md](methodology.md) for test protocols, warmup procedures, and
+statistical methods.

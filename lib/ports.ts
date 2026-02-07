@@ -28,7 +28,7 @@ export async function isPortFree(port: number): Promise<boolean> {
  */
 export async function waitForPortFree(
   port: number,
-  timeoutMs: number = 5000
+  timeoutMs: number = 5000,
 ): Promise<boolean> {
   const startTime = Date.now();
   const pollIntervalMs = 100;
@@ -44,23 +44,67 @@ export async function waitForPortFree(
 }
 
 /**
- * Wait for a server to be ready by polling a health endpoint
+ * Wait for a TCP port to accept connections (faster than HTTP polling)
+ */
+async function waitForTcpReady(
+  port: number,
+  timeoutMs: number,
+  pollIntervalMs: number = 2,
+): Promise<boolean> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      const conn = await Deno.connect({ hostname: "127.0.0.1", port });
+      conn.close();
+      return true;
+    } catch {
+      // Port not listening yet
+    }
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+
+  return false;
+}
+
+/**
+ * Wait for a server to be ready by polling a health endpoint.
+ * Uses TCP connect probing first for speed, then validates with one HTTP request.
+ * pollIntervalMs controls TCP probe frequency (default 100ms for general use).
  */
 export async function waitForServer(
   port: number,
   healthPath: string = "/api/health",
-  timeoutMs: number = 5000
+  timeoutMs: number = 5000,
+  pollIntervalMs: number = 100,
 ): Promise<boolean> {
   const startTime = Date.now();
-  const pollIntervalMs = 100;
-  const url = `http://127.0.0.1:${port}${healthPath}`;
 
-  while (Date.now() - startTime < timeoutMs) {
+  // Phase 1: wait for TCP port to accept connections (tight loop)
+  const tcpReady = await waitForTcpReady(port, timeoutMs, pollIntervalMs);
+  if (!tcpReady) return false;
+
+  // Phase 2: validate with one HTTP request
+  const remaining = timeoutMs - (Date.now() - startTime);
+  if (remaining <= 0) return false;
+
+  const url = `http://127.0.0.1:${port}${healthPath}`;
+  try {
+    const resp = await fetch(url, {
+      signal: AbortSignal.timeout(Math.min(remaining, 2000)),
+    });
+    if (resp.ok) return true;
+  } catch {
+    // HTTP not ready yet despite TCP accepting - fall through to polling
+  }
+
+  // Phase 3: if HTTP failed, poll normally for remaining time
+  const pollStart = Date.now();
+  const pollRemaining = timeoutMs - (pollStart - startTime);
+  while (Date.now() - pollStart < pollRemaining) {
     try {
       const resp = await fetch(url, { signal: AbortSignal.timeout(1000) });
-      if (resp.ok) {
-        return true;
-      }
+      if (resp.ok) return true;
     } catch {
       // Server not ready yet
     }
@@ -97,7 +141,7 @@ export function getDefaultPort(runtime: "deno" | "zigttp"): number {
  * Ensure a port is free, picking an alternative if not
  */
 export async function ensurePortFree(
-  preferredPort: number
+  preferredPort: number,
 ): Promise<{ port: number; switched: boolean }> {
   if (await isPortFree(preferredPort)) {
     return { port: preferredPort, switched: false };

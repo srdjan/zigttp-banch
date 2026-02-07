@@ -5,9 +5,9 @@
 
 import { type Runtime } from "./runtime.ts";
 import { ensurePortFree, getDefaultPort } from "./ports.ts";
-import { startServer, stopServer, type ServerHandle } from "./server.ts";
+import { type ServerHandle, startServer, stopServer } from "./server.ts";
 import { saveResult } from "./results.ts";
-import { sleep, computeStats, isoTimestamp } from "./utils.ts";
+import { computeStats, isoTimestamp, sleep } from "./utils.ts";
 
 export type MemoryConfig = {
   loadDurationSecs: number;
@@ -67,7 +67,7 @@ async function getRssKb(pid: number): Promise<number> {
 async function sampleRss(
   pid: number,
   durationMs: number,
-  intervalMs: number
+  intervalMs: number,
 ): Promise<number[]> {
   const samples: number[] = [];
   const startTime = Date.now();
@@ -87,13 +87,19 @@ async function sampleRss(
 /**
  * Run load generator in background
  */
-async function runLoadGenerator(
+function runLoadGenerator(
   port: number,
   connections: number,
-  durationSecs: number
-): Promise<Deno.ChildProcess> {
+  durationSecs: number,
+): Deno.ChildProcess {
   const cmd = new Deno.Command("hey", {
-    args: ["-c", String(connections), "-z", `${durationSecs}s`, `http://127.0.0.1:${port}/api/health`],
+    args: [
+      "-c",
+      String(connections),
+      "-z",
+      `${durationSecs}s`,
+      `http://127.0.0.1:${port}/api/health`,
+    ],
     stdout: "null",
     stderr: "null",
   });
@@ -107,7 +113,7 @@ async function runLoadGenerator(
 export async function runMemoryProfile(
   runtime: Runtime,
   resultsDir: string,
-  config: Partial<MemoryConfig> = {}
+  config: Partial<MemoryConfig> = {},
 ): Promise<MemoryResult | null> {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
 
@@ -138,24 +144,23 @@ export async function runMemoryProfile(
     }
 
     // Start load generator
-    const loadProcess = await runLoadGenerator(
+    const loadProcess = runLoadGenerator(
       port,
       fullConfig.connections,
-      fullConfig.loadDurationSecs
+      fullConfig.loadDurationSecs,
     );
 
     // Sample RSS during load
     const samples = await sampleRss(
       handle.pid,
       fullConfig.loadDurationSecs * 1000,
-      fullConfig.sampleIntervalMs
+      fullConfig.sampleIntervalMs,
     );
 
     // Wait for load generator to finish
-    try {
-      await loadProcess.status;
-    } catch {
-      // Load generator may have already exited
+    const loadStatus = await loadProcess.status;
+    if (loadStatus.code !== 0) {
+      console.error(`  Load generator exited with code ${loadStatus.code}`);
     }
 
     if (samples.length === 0) {
@@ -202,7 +207,7 @@ export async function runMemoryProfile(
 export async function runAllMemoryProfiles(
   runtimes: Runtime[],
   resultsDir: string,
-  config: Partial<MemoryConfig> = {}
+  config: Partial<MemoryConfig> = {},
 ): Promise<Map<Runtime, MemoryResult | null>> {
   const results = new Map<Runtime, MemoryResult | null>();
 
