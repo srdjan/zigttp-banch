@@ -60,7 +60,7 @@ async function measureColdStart(
       stdout: "null",
       stderr: "null",
     });
-  } else {
+  } else if (runtime === "zigttp") {
     // Use embedded bytecode if available (no handler path = embedded mode)
     // Otherwise use runtime parsing (handler path overrides embedded)
     const useEmbedded = Deno.env.get("ZIGTTP_USE_EMBEDDED") === "true";
@@ -70,6 +70,21 @@ async function measureColdStart(
 
     cmd = new Deno.Command(ZIGTTP_SERVER_BIN, {
       args,
+      stdout: "null",
+      stderr: "null",
+    });
+  } else if (runtime === "node") {
+    cmd = new Deno.Command("node", {
+      args: [handlerPath],
+      env: { ...Deno.env.toObject(), PORT: String(port) },
+      stdout: "null",
+      stderr: "null",
+    });
+  } else {
+    // bun
+    cmd = new Deno.Command("bun", {
+      args: ["run", handlerPath],
+      env: { ...Deno.env.toObject(), PORT: String(port) },
       stdout: "null",
       stderr: "null",
     });
@@ -121,9 +136,13 @@ export async function runColdStartBenchmarks(
   const { port } = await ensurePortFree(preferredPort);
 
   // Get handler path
-  const handlerPath = runtime === "deno"
-    ? join(projectDir, "handlers", "deno", "server.ts")
-    : join(projectDir, "handlers", "zigttp", "handler.js");
+  const handlerPaths: Record<Runtime, string> = {
+    deno: join(projectDir, "handlers", "deno", "server.ts"),
+    zigttp: join(projectDir, "handlers", "zigttp", "handler.js"),
+    node: join(projectDir, "handlers", "node", "server.js"),
+    bun: join(projectDir, "handlers", "bun", "server.ts"),
+  };
+  const handlerPath = handlerPaths[runtime];
 
   const samples: number[] = [];
 

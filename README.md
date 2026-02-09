@@ -20,8 +20,8 @@ deno run -A bench.ts memory   # Memory profiling
 ```
 
 Runtime argument is optional: `deno`, `zigttp`, or `all` (default). HTTP
-benchmarks also support mode selection: `--http-mode=parity|implementation`
-(default: `parity`).
+benchmarks also support mode selection:
+`--http-mode=parity|implementation|floor` (default: `parity`).
 
 ## Running Benchmarks
 
@@ -32,6 +32,8 @@ deno run -A bench.ts http zigttp
 
 # With options
 deno run -A bench.ts http zigttp --connections=20 --http-mode=parity
+deno run -A bench.ts http zigttp --http-mode=parity --zigttp-pool=16
+deno run -A bench.ts http all --http-mode=floor --pool-sweep=8,12,16,28
 deno run -A bench.ts micro zigttp --filter=arithmetic,stringOps
 deno run -A bench.ts cold zigttp --iterations=50
 
@@ -121,6 +123,7 @@ Build zigttp:
 
 Measures requests/second and latency percentiles for standard endpoints:
 
+- `/api/noop` - Minimal static JSON response (fixed-overhead floor test)
 - `/api/health` - Health check (minimal response)
 - `/api/greet/:name` - Path parameter handling
 - `/api/compute` - CPU-bound handler

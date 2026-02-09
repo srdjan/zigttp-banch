@@ -60,6 +60,8 @@ type Options = {
   runtime: Runtime | "all";
   connections?: number;
   httpMode: HttpMode;
+  zigttpPool?: number;
+  poolSweep?: number[];
   filter?: string;
   iterations?: number;
   target?: string; // For compare/report commands
@@ -86,17 +88,22 @@ Commands:
 Runtime:
   deno                 Run only Deno benchmarks
   zigttp               Run only zigttp benchmarks
-  all                  Run both (default)
+  node                 Run only Node.js benchmarks
+  bun                  Run only Bun benchmarks
+  all                  Run all available (default)
 
 Options:
   --connections=N      Number of connections for HTTP benchmarks (default: 10)
-  --http-mode=MODE     HTTP benchmark mode: parity|implementation (default: parity)
+  --http-mode=MODE     HTTP benchmark mode: parity|implementation|floor (default: parity)
+  --zigttp-pool=N      Override zigttp runtime pool size (HTTP benchmarks)
+  --pool-sweep=a,b,c   Run zigttp HTTP benchmarks for each pool size
   --filter=name1,name2 Filter microbenchmarks by name
   --iterations=N       Number of iterations for cold start (default: 100)
 
 Examples:
   deno run -A bench.ts quick zigttp
   deno run -A bench.ts http deno --connections=20 --http-mode=parity
+  deno run -A bench.ts http all --http-mode=floor --pool-sweep=8,12,16,28
   deno run -A bench.ts micro zigttp --filter=arithmetic,stringOps
   deno run -A bench.ts compare results/20260126_123456_1234_5678
   deno run -A bench.ts report results/20260126_123456_1234_5678
@@ -109,6 +116,22 @@ function parsePositiveInt(name: string, raw: string): number {
     throw new Error(`Invalid ${name}: ${raw} (must be a positive integer)`);
   }
   return value;
+}
+
+function parsePoolSweep(raw: string): number[] {
+  const pools = raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((part) => parsePositiveInt("pool size", part));
+
+  if (pools.length === 0) {
+    throw new Error(
+      `Invalid --pool-sweep: ${raw} (expected comma-separated positive integers)`,
+    );
+  }
+
+  return [...new Set(pools)];
 }
 
 function parseArgs(args: string[]): Options {
@@ -140,8 +163,11 @@ function parseArgs(args: string[]): Options {
     }
 
     // Runtime
-    if (arg === "deno" || arg === "zigttp" || arg === "all") {
-      options.runtime = arg;
+    if (
+      arg === "deno" || arg === "zigttp" || arg === "node" || arg === "bun" ||
+      arg === "all"
+    ) {
+      options.runtime = arg as Runtime | "all";
       continue;
     }
 
@@ -154,12 +180,26 @@ function parseArgs(args: string[]): Options {
 
     if (arg.startsWith("--http-mode=")) {
       const mode = arg.split("=")[1];
-      if (mode !== "parity" && mode !== "implementation") {
+      if (
+        mode !== "parity" && mode !== "implementation" && mode !== "floor"
+      ) {
         throw new Error(
-          `Invalid --http-mode: ${mode} (expected parity|implementation)`,
+          `Invalid --http-mode: ${mode} (expected parity|implementation|floor)`,
         );
       }
       options.httpMode = mode;
+      continue;
+    }
+
+    if (arg.startsWith("--zigttp-pool=")) {
+      const value = arg.split("=")[1];
+      options.zigttpPool = parsePositiveInt("zigttp pool", value);
+      continue;
+    }
+
+    if (arg.startsWith("--pool-sweep=")) {
+      const value = arg.split("=")[1];
+      options.poolSweep = parsePoolSweep(value);
       continue;
     }
 
@@ -197,12 +237,42 @@ async function runHttp(
   resultsDir: string,
   options: Options,
 ): Promise<void> {
-  const config: Partial<HttpConfig> = {};
+  if (options.poolSweep && options.zigttpPool) {
+    throw new Error(
+      "Use either --pool-sweep or --zigttp-pool (not both together)",
+    );
+  }
+
+  const config: Partial<HttpConfig> = {
+    mode: options.httpMode,
+    zigttpPoolSize: options.zigttpPool,
+  };
 
   if (options.connections) {
     config.connections = options.connections;
   }
-  config.mode = options.httpMode;
+
+  if (options.poolSweep && options.poolSweep.length > 0) {
+    if (runtimes.includes("deno")) {
+      await runAllHttpBenchmarks(["deno"], resultsDir, {
+        ...config,
+        zigttpPoolSize: undefined,
+      });
+      console.log("");
+    }
+
+    if (runtimes.includes("zigttp")) {
+      for (const poolSize of options.poolSweep) {
+        console.log(`=== zigttp Pool Sweep: n=${poolSize} ===`);
+        await runAllHttpBenchmarks(["zigttp"], resultsDir, {
+          ...config,
+          zigttpPoolSize: poolSize,
+        });
+        console.log("");
+      }
+    }
+    return;
+  }
 
   await runAllHttpBenchmarks(runtimes, resultsDir, config);
 }
@@ -265,6 +335,12 @@ async function runQuick(
   resultsDir: string,
   options: Options,
 ): Promise<void> {
+  if (options.poolSweep && options.zigttpPool) {
+    throw new Error(
+      "Use either --pool-sweep or --zigttp-pool (not both together)",
+    );
+  }
+
   console.log("Quick validation mode: reduced duration and iterations");
   console.log("");
 
@@ -274,8 +350,31 @@ async function runQuick(
     duration: "5s",
     warmupRequests: 100,
     mode: options.httpMode,
+    zigttpPoolSize: options.zigttpPool,
   };
-  await runAllHttpBenchmarks(runtimes, resultsDir, httpConfig);
+
+  if (options.poolSweep && options.poolSweep.length > 0) {
+    if (runtimes.includes("deno")) {
+      await runAllHttpBenchmarks(["deno"], resultsDir, {
+        ...httpConfig,
+        zigttpPoolSize: undefined,
+      });
+      console.log("");
+    }
+
+    if (runtimes.includes("zigttp")) {
+      for (const poolSize of options.poolSweep) {
+        console.log(`=== zigttp Pool Sweep: n=${poolSize} ===`);
+        await runAllHttpBenchmarks(["zigttp"], resultsDir, {
+          ...httpConfig,
+          zigttpPoolSize: poolSize,
+        });
+        console.log("");
+      }
+    }
+  } else {
+    await runAllHttpBenchmarks(runtimes, resultsDir, httpConfig);
+  }
   console.log("");
 
   // Quick Microbench: reduced iterations
@@ -368,6 +467,16 @@ async function main(): Promise<void> {
     console.log(`  zigttp: ${runtimeInfo.zigttp.version ?? "available"}`);
   } else {
     console.log("  zigttp: not built");
+  }
+  if (runtimeInfo.node.available) {
+    console.log(`  node: ${runtimeInfo.node.version}`);
+  } else {
+    console.log("  node: not found");
+  }
+  if (runtimeInfo.bun.available) {
+    console.log(`  bun: ${runtimeInfo.bun.version}`);
+  } else {
+    console.log("  bun: not found");
   }
   console.log("");
 

@@ -13,6 +13,10 @@ export type ServerHandle = {
   runtime: Runtime;
 };
 
+export type StartServerOptions = {
+  zigttpPoolSize?: number;
+};
+
 // Global registry of active servers for cleanup
 const activeServers = new Set<ServerHandle>();
 
@@ -91,12 +95,16 @@ export async function startServer(
   runtime: Runtime,
   port: number,
   handlerPath?: string,
+  options: StartServerOptions = {},
 ): Promise<ServerHandle> {
-  const defaultHandler = runtime === "deno"
-    ? join(projectDir, "handlers", "deno", "server.ts")
-    : join(projectDir, "handlers", "zigttp", "handler.js");
+  const defaultHandlers: Record<Runtime, string> = {
+    deno: join(projectDir, "handlers", "deno", "server.ts"),
+    zigttp: join(projectDir, "handlers", "zigttp", "handler.js"),
+    node: join(projectDir, "handlers", "node", "server.js"),
+    bun: join(projectDir, "handlers", "bun", "server.ts"),
+  };
 
-  const handler = handlerPath ?? defaultHandler;
+  const handler = handlerPath ?? defaultHandlers[runtime];
 
   let cmd: Deno.Command;
 
@@ -107,9 +115,30 @@ export async function startServer(
       stdout: "piped",
       stderr: "piped",
     });
-  } else {
+  } else if (runtime === "zigttp") {
+    const args = ["-p", String(port), "-q"];
+    if (options.zigttpPoolSize) {
+      args.push("-n", String(options.zigttpPoolSize));
+    }
+    args.push(handler);
+
     cmd = new Deno.Command(ZIGTTP_SERVER_BIN, {
-      args: ["-p", String(port), "-q", handler],
+      args,
+      stdout: "piped",
+      stderr: "piped",
+    });
+  } else if (runtime === "node") {
+    cmd = new Deno.Command("node", {
+      args: [handler],
+      env: { ...Deno.env.toObject(), PORT: String(port) },
+      stdout: "piped",
+      stderr: "piped",
+    });
+  } else {
+    // bun
+    cmd = new Deno.Command("bun", {
+      args: ["run", handler],
+      env: { ...Deno.env.toObject(), PORT: String(port) },
       stdout: "piped",
       stderr: "piped",
     });

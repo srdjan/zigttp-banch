@@ -8,7 +8,7 @@ import {
   join,
 } from "https://deno.land/std@0.220.0/path/mod.ts";
 
-export type Runtime = "deno" | "zigttp";
+export type Runtime = "deno" | "zigttp" | "node" | "bun";
 
 const libDir = dirname(fromFileUrl(import.meta.url));
 const projectDir = dirname(libDir);
@@ -38,6 +38,8 @@ export type RuntimeAvailability = {
     serverBin: string;
     benchBin: string;
   };
+  node: { available: boolean; version: string | null };
+  bun: { available: boolean; version: string | null };
 };
 
 /**
@@ -89,11 +91,40 @@ async function getZigttpVersion(): Promise<string | null> {
 }
 
 /**
+ * Get version from a CLI command (e.g. node --version, bun --version)
+ */
+async function getCliVersion(
+  binary: string,
+  args: string[] = ["--version"],
+): Promise<string | null> {
+  try {
+    const cmd = new Deno.Command(binary, {
+      args,
+      stdout: "piped",
+      stderr: "piped",
+    });
+    const { code, stdout } = await cmd.output();
+    if (code === 0) {
+      const output = new TextDecoder().decode(stdout).trim();
+      // Strip leading 'v' if present (e.g. v22.1.0 -> 22.1.0)
+      return output.startsWith("v") ? output.slice(1) : output;
+    }
+  } catch {
+    // Binary not found or not executable
+  }
+  return null;
+}
+
+/**
  * Detect available runtimes and their versions
  */
 export async function detectRuntimes(): Promise<RuntimeAvailability> {
   const zigttpAvailable = await binaryExists(ZIGTTP_SERVER_BIN);
-  const zigttpVersion = zigttpAvailable ? await getZigttpVersion() : null;
+  const [zigttpVersion, nodeVersion, bunVersion] = await Promise.all([
+    zigttpAvailable ? getZigttpVersion() : Promise.resolve(null),
+    getCliVersion("node"),
+    getCliVersion("bun"),
+  ]);
 
   return {
     deno: {
@@ -105,6 +136,14 @@ export async function detectRuntimes(): Promise<RuntimeAvailability> {
       version: zigttpVersion,
       serverBin: ZIGTTP_SERVER_BIN,
       benchBin: ZIGTTP_BENCH_BIN,
+    },
+    node: {
+      available: nodeVersion !== null,
+      version: nodeVersion,
+    },
+    bun: {
+      available: bunVersion !== null,
+      version: bunVersion,
     },
   };
 }
@@ -120,6 +159,14 @@ export async function getRuntimeVersions(): Promise<Record<string, string>> {
 
   if (runtimes.zigttp.available && runtimes.zigttp.version) {
     versions.zigttp = runtimes.zigttp.version;
+  }
+
+  if (runtimes.node.available && runtimes.node.version) {
+    versions.node = runtimes.node.version;
+  }
+
+  if (runtimes.bun.available && runtimes.bun.version) {
+    versions.bun = runtimes.bun.version;
   }
 
   return versions;
@@ -145,6 +192,22 @@ export async function getRuntimesToRun(
       console.log(
         "zigttp not built, skipping (run: cd ../zigttp && zig build -Doptimize=ReleaseFast)",
       );
+    }
+  }
+
+  if (runtimeArg === "all" || runtimeArg === "node") {
+    if (runtimes.node.available) {
+      result.push("node");
+    } else if (runtimeArg === "node") {
+      console.log("node not found, skipping (install Node.js)");
+    }
+  }
+
+  if (runtimeArg === "all" || runtimeArg === "bun") {
+    if (runtimes.bun.available) {
+      result.push("bun");
+    } else if (runtimeArg === "bun") {
+      console.log("bun not found, skipping (install Bun)");
     }
   }
 

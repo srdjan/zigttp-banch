@@ -4,6 +4,8 @@
 
 const DEFAULT_PORT_DENO = 8080;
 const DEFAULT_PORT_ZIGTTP = 8081;
+const DEFAULT_PORT_NODE = 8082;
+const DEFAULT_PORT_BUN = 8083;
 
 /**
  * Check if a port is free (not listening)
@@ -133,8 +135,19 @@ async function pickFreePort(startPort: number = 49152): Promise<number> {
 /**
  * Get the default port for a runtime
  */
-export function getDefaultPort(runtime: "deno" | "zigttp"): number {
-  return runtime === "deno" ? DEFAULT_PORT_DENO : DEFAULT_PORT_ZIGTTP;
+export function getDefaultPort(
+  runtime: "deno" | "zigttp" | "node" | "bun",
+): number {
+  switch (runtime) {
+    case "deno":
+      return DEFAULT_PORT_DENO;
+    case "zigttp":
+      return DEFAULT_PORT_ZIGTTP;
+    case "node":
+      return DEFAULT_PORT_NODE;
+    case "bun":
+      return DEFAULT_PORT_BUN;
+  }
 }
 
 /**

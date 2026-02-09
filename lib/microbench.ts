@@ -170,6 +170,124 @@ async function runDenoMicrobench(
   }
 }
 
+/**
+ * Run microbenchmarks with Node.js
+ */
+async function runNodeMicrobench(
+  suiteScript: string,
+  resultsDir: string,
+): Promise<MicrobenchResult | null> {
+  console.log("=== Microbenchmarks: node ===");
+
+  const suitePath = join(resultsDir, "microbench_suite_node.js");
+  await Deno.writeTextFile(suitePath, suiteScript);
+
+  const cmd = new Deno.Command("node", {
+    args: [suitePath],
+    stdout: "piped",
+    stderr: "piped",
+  });
+
+  const { code, stdout, stderr } = await cmd.output();
+
+  if (code !== 0) {
+    console.error("  Failed to run Node benchmarks");
+    console.error(new TextDecoder().decode(stderr));
+    return null;
+  }
+
+  const output = new TextDecoder().decode(stdout).trim();
+  if (!output) {
+    console.error("  No output from Node benchmarks");
+    return null;
+  }
+
+  try {
+    const benchmarks = JSON.parse(output) as Record<string, BenchmarkData>;
+
+    for (const [name, data] of Object.entries(benchmarks)) {
+      const opsPerSec = data.ops_per_sec ?? 0;
+      console.log(
+        `  ${name}: ${Math.floor(opsPerSec).toLocaleString()} ops/sec`,
+      );
+    }
+
+    const result: MicrobenchResult = {
+      type: "microbenchmark",
+      runtime: "node",
+      benchmarks,
+      timestamp: new Date().toISOString(),
+    };
+
+    await saveResult(resultsDir, "microbench_node.json", result);
+    console.log("");
+    return result;
+  } catch (e) {
+    console.error("  Failed to parse benchmark output:", e);
+    console.log("  Raw output:", output.slice(0, 500));
+    return null;
+  }
+}
+
+/**
+ * Run microbenchmarks with Bun
+ */
+async function runBunMicrobench(
+  suiteScript: string,
+  resultsDir: string,
+): Promise<MicrobenchResult | null> {
+  console.log("=== Microbenchmarks: bun ===");
+
+  const suitePath = join(resultsDir, "microbench_suite_bun.js");
+  await Deno.writeTextFile(suitePath, suiteScript);
+
+  const cmd = new Deno.Command("bun", {
+    args: ["run", suitePath],
+    stdout: "piped",
+    stderr: "piped",
+  });
+
+  const { code, stdout, stderr } = await cmd.output();
+
+  if (code !== 0) {
+    console.error("  Failed to run Bun benchmarks");
+    console.error(new TextDecoder().decode(stderr));
+    return null;
+  }
+
+  const output = new TextDecoder().decode(stdout).trim();
+  if (!output) {
+    console.error("  No output from Bun benchmarks");
+    return null;
+  }
+
+  try {
+    const benchmarks = JSON.parse(output) as Record<string, BenchmarkData>;
+
+    for (const [name, data] of Object.entries(benchmarks)) {
+      const opsPerSec = data.ops_per_sec ?? 0;
+      console.log(
+        `  ${name}: ${Math.floor(opsPerSec).toLocaleString()} ops/sec`,
+      );
+    }
+
+    const result: MicrobenchResult = {
+      type: "microbenchmark",
+      runtime: "bun",
+      benchmarks,
+      timestamp: new Date().toISOString(),
+    };
+
+    await saveResult(resultsDir, "microbench_bun.json", result);
+    console.log("");
+    return result;
+  } catch (e) {
+    console.error("  Failed to parse benchmark output:", e);
+    console.log("  Raw output:", output.slice(0, 500));
+    return null;
+  }
+}
+
 // All benchmark names in suite order
 const ALL_BENCHMARK_NAMES = [
   "arithmetic",
@@ -366,12 +484,19 @@ export async function runAllMicrobenchmarks(
 
   for (const runtime of runtimes) {
     let result: MicrobenchResult | null;
-    if (runtime === "deno") {
-      const suiteScript = await buildSuiteScript(fullConfig, runtime);
-      result = await runDenoMicrobench(suiteScript, resultsDir);
-    } else {
+    if (runtime === "zigttp") {
       // zigttp builds its own suite scripts per group internally
       result = await runZigttpMicrobench(resultsDir, fullConfig);
+    } else {
+      // deno, node, and bun all use the standard suite script path
+      const suiteScript = await buildSuiteScript(fullConfig, runtime);
+      if (runtime === "deno") {
+        result = await runDenoMicrobench(suiteScript, resultsDir);
+      } else if (runtime === "node") {
+        result = await runNodeMicrobench(suiteScript, resultsDir);
+      } else {
+        result = await runBunMicrobench(suiteScript, resultsDir);
+      }
     }
     results.set(runtime, result);
   }

@@ -127,14 +127,17 @@ export function generateReport(
       return a.endpoint.localeCompare(b.endpoint);
     });
 
-    lines.push("| Runtime | Endpoint | RPS | p99 Latency |");
-    lines.push("|---------|----------|-----|-------------|");
+    lines.push("| Runtime | Endpoint | Pool | RPS | p99 Latency |");
+    lines.push("|---------|----------|------|-----|-------------|");
 
     for (const data of sortedHttp) {
       const rps = data.metrics.requests_per_second;
       const p99 = data.metrics.latency_p99_secs;
+      const pool = data.runtime === "zigttp" && data.zigttp_pool_size
+        ? String(data.zigttp_pool_size)
+        : "-";
       lines.push(
-        `| ${data.runtime} | ${data.endpoint} | ${
+        `| ${data.runtime} | ${data.endpoint} | ${pool} | ${
           formatNumber(Math.round(rps))
         } | ${p99.toFixed(4)}s |`,
       );
@@ -257,8 +260,12 @@ export function generateReport(
             baselineMatch.metrics.requests_per_second;
           const percent = ((ratio - 1) * 100).toFixed(1);
           const sign = ratio >= 1 ? "+" : "";
+          const poolLabel = result.runtime === "zigttp" &&
+              result.zigttp_pool_size
+            ? ` (pool=${result.zigttp_pool_size})`
+            : "";
           lines.push(
-            `- ${result.runtime} ${result.endpoint} (${result.connections}c, ${result.duration}): ${
+            `- ${result.runtime}${poolLabel} ${result.endpoint} (${result.connections}c, ${result.duration}): ${
               ratio.toFixed(2)
             }x (${sign}${percent}%)`,
           );

@@ -22,6 +22,11 @@ function fibonacci(n) {
 function handler(request) {
     const path = request.path;
 
+    // /api/noop - Minimal static JSON response for fixed-overhead measurement
+    if (path === '/api/noop') {
+        return Response.rawJson('{"ok":true}');
+    }
+
     // /api/health - Health check
     if (path === '/api/health') {
         return Response.json({status: 'ok', runtime: 'zigttp', timestamp: 0});

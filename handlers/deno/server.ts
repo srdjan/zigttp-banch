@@ -2,6 +2,10 @@
 // Mirrors zigttp handler.js endpoints
 
 const PORT = parseInt(Deno.env.get("PORT") || "8080", 10);
+const NOOP_JSON = "{\"ok\":true}";
+const NOOP_RESPONSE_INIT: ResponseInit = {
+    headers: { "content-type": "application/json" },
+};
 
 function fibonacci(n: number): number {
     let a = 0, b = 1;
@@ -48,6 +52,11 @@ Deno.serve({ port: PORT, hostname: "127.0.0.1" }, async (req: Request): Promise<
     const url = new URL(req.url);
     const pathname = url.pathname;
     const method = req.method;
+
+    // /api/noop - Minimal static JSON response for fixed-overhead measurement
+    if (pathname === "/api/noop") {
+        return new Response(NOOP_JSON, NOOP_RESPONSE_INIT);
+    }
 
     // /api/health - Health check
     if (pathname === "/api/health") {

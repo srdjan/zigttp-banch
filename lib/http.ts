@@ -15,7 +15,7 @@ export type EndpointConfig = {
   headers?: Record<string, string>;
 };
 
-export type HttpMode = "parity" | "implementation";
+export type HttpMode = "parity" | "implementation" | "floor";
 
 export type HttpConfig = {
   mode: HttpMode;
@@ -24,6 +24,7 @@ export type HttpConfig = {
   warmupRequests: number;
   endpoints: (string | EndpointConfig)[];
   cooldownSecs: number;
+  zigttpPoolSize?: number;
 };
 
 export type HttpMetrics = {
@@ -42,6 +43,7 @@ export type HttpResult = {
   connections: number;
   duration: string;
   warmup_requests: number;
+  zigttp_pool_size?: number;
   metrics: HttpMetrics;
   timestamp: string;
 };
@@ -68,6 +70,10 @@ const IMPLEMENTATION_ENDPOINTS: (string | EndpointConfig)[] = [
   "/api/process?items=500&page=3&limit=25",
 ];
 
+const FLOOR_ENDPOINTS: (string | EndpointConfig)[] = [
+  "/api/noop",
+];
+
 function cloneEndpoint(
   endpoint: string | EndpointConfig,
 ): string | EndpointConfig {
@@ -81,7 +87,11 @@ function cloneEndpoint(
 function resolveHttpConfig(config: Partial<HttpConfig>): HttpConfig {
   const mode = config.mode ?? DEFAULT_CONFIG.mode;
   const endpoints = config.endpoints ??
-    (mode === "parity" ? PARITY_ENDPOINTS : IMPLEMENTATION_ENDPOINTS);
+    (mode === "parity"
+      ? PARITY_ENDPOINTS
+      : mode === "implementation"
+      ? IMPLEMENTATION_ENDPOINTS
+      : FLOOR_ENDPOINTS);
 
   return {
     ...DEFAULT_CONFIG,
@@ -311,14 +321,18 @@ async function benchmarkEndpoint(
     connections: config.connections,
     duration: config.duration,
     warmup_requests: config.warmupRequests,
+    zigttp_pool_size: runtime === "zigttp" ? config.zigttpPoolSize : undefined,
     metrics,
     timestamp: isoTimestamp(),
   };
 
   // Save result
   const safeEndpoint = displayEndpoint.replace(/[\/\s]/g, "_");
+  const poolSuffix = runtime === "zigttp" && config.zigttpPoolSize
+    ? `_p${config.zigttpPoolSize}`
+    : "";
   const filename =
-    `http_${runtime}_${safeEndpoint}_${config.connections}c.json`;
+    `http_${runtime}_${safeEndpoint}_${config.connections}c${poolSuffix}.json`;
   await saveResult(resultsDir, filename, result);
 
   return result;
@@ -343,7 +357,11 @@ export async function runHttpBenchmarks(
   // Start server
   let handle: ServerHandle;
   try {
-    handle = await startServer(runtime, port);
+    handle = await startServer(runtime, port, undefined, {
+      zigttpPoolSize: runtime === "zigttp"
+        ? fullConfig.zigttpPoolSize
+        : undefined,
+    });
   } catch (e) {
     console.error(`Failed to start ${runtime} server: ${e}`);
     return [];
@@ -385,6 +403,9 @@ export async function runAllHttpBenchmarks(
   console.log(`Results: ${resultsDir}`);
   console.log(`Mode: ${fullConfig.mode}`);
   console.log(`Connections: ${fullConfig.connections}`);
+  if (fullConfig.zigttpPoolSize) {
+    console.log(`zigttp pool size: ${fullConfig.zigttpPoolSize}`);
+  }
   console.log("");
 
   for (let i = 0; i < runtimes.length; i++) {

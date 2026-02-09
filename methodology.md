@@ -33,6 +33,7 @@ Fresh process spawn per measurement iteration. Used for cold start benchmarks.
 
 - `parity` (default): endpoints intended for cross-runtime comparisons
 - `implementation`: includes optimized/runtime-specific paths
+- `floor`: minimal fixed-overhead endpoint (`/api/noop`)
 
 ### Warmup Protocol
 
@@ -54,13 +55,14 @@ Fresh process spawn per measurement iteration. Used for cold start benchmarks.
 
 ### Endpoints Tested
 
-| Endpoint         | Type | Payload                  |
-| ---------------- | ---- | ------------------------ |
-| /api/health      | GET  | ~60 bytes JSON           |
-| /api/greet/:name | GET  | ~40 bytes JSON           |
-| /api/compute     | GET  | ~50 bytes JSON           |
-| /api/echo        | GET  | implementation mode only |
-| /api/process     | GET  | implementation mode only |
+| Endpoint         | Type | Payload                     |
+| ---------------- | ---- | --------------------------- |
+| /api/noop        | GET  | static JSON (`{"ok":true}`) |
+| /api/health      | GET  | ~60 bytes JSON              |
+| /api/greet/:name | GET  | ~40 bytes JSON              |
+| /api/compute     | GET  | ~50 bytes JSON              |
+| /api/echo        | GET  | implementation mode only    |
+| /api/process     | GET  | implementation mode only    |
 
 ## Microbenchmarks
 

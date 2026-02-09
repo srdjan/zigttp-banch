@@ -1,7 +1,11 @@
 // Universal microbenchmark runner
 // Works in Deno and zigttp
 
-const isZigttpRuntime = typeof Response !== 'undefined' && typeof Response.json === 'function' && typeof Deno === 'undefined';
+const isZigttpRuntime = typeof Deno === 'undefined'
+    && typeof process === 'undefined'
+    && typeof Bun === 'undefined'
+    && typeof Response !== 'undefined'
+    && typeof Response.json === 'function';
 
 // range() polyfill for Deno (zigttp provides builtin)
 if (!isZigttpRuntime && typeof range === 'undefined') {
@@ -401,6 +405,8 @@ function benchmark(name, fn, innerIterations, options) {
 // Detect runtime
 function detectRuntime() {
     if (typeof Deno !== 'undefined') return 'deno';
+    if (typeof Bun !== 'undefined') return 'bun';
+    if (typeof process !== 'undefined' && process.versions && process.versions.node) return 'node';
     if (typeof Response !== 'undefined' && typeof Response.json === 'function') return 'zigttp';
     return 'unknown';
 }
